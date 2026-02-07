@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "literature-review-extractor"
+version = "0.1.0"
+description = "Structured extraction of academic papers for systematic literature reviews."
+requires-python = ">=3.9"
+license = "MIT"
+
+[project.scripts]
+literature-review-extractor = "literature_review_extractor.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
