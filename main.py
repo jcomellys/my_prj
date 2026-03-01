@@ -1,69 +1,52 @@
 """
-Panama Power Grid Dashboard - Main Application Entry Point.
+Panama Power Grid Real-Time Dashboard
+Main application entry point.
 
-Sistema de Análisis en Tiempo Real de Flujos de Potencia
-del Sistema Interconectado Nacional (SIN) de Panamá a 230kV.
+Usage:
+    python main.py
 
-Run with: python main.py
-Then open: http://localhost:8000
+Then open http://localhost:8000 in your browser.
 """
 
-import sys
 import os
-
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sys
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
+
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.api.routes import router
 
 app = FastAPI(
     title="Panama Power Grid Dashboard",
-    description=(
-        "Sistema de Análisis en Tiempo Real de Flujos de Potencia "
-        "del Sistema Interconectado Nacional (SIN) de Panamá a 230kV"
-    ),
+    description="Real-time power flow analysis and monitoring for Panama's 230kV Sistema Interconectado Nacional (SIN)",
     version="1.0.0",
-)
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 # Include API routes
 app.include_router(router)
 
 # Serve static files
-app.mount("/css", StaticFiles(directory="frontend/css"), name="css")
-app.mount("/js", StaticFiles(directory="frontend/js"), name="js")
-app.mount("/assets", StaticFiles(directory="frontend/assets"), name="assets")
+frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
+app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
 
 @app.get("/")
 async def serve_dashboard():
-    """Serve the main dashboard page."""
-    return FileResponse("frontend/index.html")
+    """Serve the main dashboard HTML page."""
+    return FileResponse(os.path.join(frontend_dir, "index.html"))
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "Panama Power Grid Dashboard"}
 
 
 if __name__ == "__main__":
     import uvicorn
-    print("\n" + "=" * 60)
-    print("  PANAMA POWER GRID DASHBOARD")
-    print("  Sistema Interconectado Nacional - 230kV")
-    print("=" * 60)
-    print(f"  Dashboard: http://localhost:8000")
-    print(f"  API Docs:  http://localhost:8000/docs")
-    print("=" * 60 + "\n")
-
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
