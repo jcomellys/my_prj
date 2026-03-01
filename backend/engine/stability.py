@@ -119,7 +119,7 @@ def vq_sensitivity_analysis(buses, branches):
             "name": bus.name,
             "dv_dq": float(dv_dq),
             "province": bus.province,
-            "vulnerable": dv_dq > 0.05,  # High sensitivity threshold
+            "vulnerable": bool(dv_dq > 0.05),  # High sensitivity threshold
         })
 
     sensitivities.sort(key=lambda x: abs(x["dv_dq"]), reverse=True)
@@ -205,7 +205,7 @@ def contingency_analysis(buses, branches):
             "critical": n_critical,
             "warning": n_warning,
             "normal": n_normal,
-            "n1_secure": n_critical == 0,
+            "n1_secure": bool(n_critical == 0),
         },
     }
 
@@ -290,7 +290,7 @@ def frequency_stability_assessment(buses, generators, disturbance_mw=300):
         "frequency_nadir_hz": float(f_nadir),
         "steady_state_frequency_hz": float(f_ss),
         "nadir_time_s": t_nadir,
-        "ufls_triggered": f_nadir < 59.0,  # Under-frequency load shedding
+        "ufls_triggered": bool(f_nadir < 59.0),  # Under-frequency load shedding
         "time_series": {
             "time_s": t.tolist(),
             "frequency_hz": f_response.tolist(),
