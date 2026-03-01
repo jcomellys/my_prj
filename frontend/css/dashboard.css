@@ -25,6 +25,7 @@
     --solar-color: #f59e0b;
     --gas-color: #f97316;
     --coal-color: #6b7280;
+    --diesel-color: #a855f7;
     --siepac-color: #8b5cf6;
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
@@ -442,6 +443,7 @@ body {
 .fuel-hydro { color: var(--hydro-color); }
 .fuel-gas { color: var(--gas-color); }
 .fuel-coal { color: var(--coal-color); }
+.fuel-diesel { color: var(--diesel-color); }
 .fuel-wind { color: var(--wind-color); }
 .fuel-solar { color: var(--solar-color); }
 .fuel-siepac { color: var(--siepac-color); }
@@ -457,6 +459,7 @@ body {
 .fuel-dot.hydro { background: var(--hydro-color); }
 .fuel-dot.gas { background: var(--gas-color); }
 .fuel-dot.coal { background: var(--coal-color); }
+.fuel-dot.diesel { background: var(--diesel-color); }
 .fuel-dot.wind { background: var(--wind-color); }
 .fuel-dot.solar { background: var(--solar-color); }
 .fuel-dot.siepac { background: var(--siepac-color); }

@@ -32,6 +32,7 @@ const FUEL_COLORS = {
     'Hydro': '#3b82f6',
     'Natural Gas': '#f97316',
     'Coal/Pet Coke': '#6b7280',
+    'Diesel/Bunker': '#a855f7',
     'Wind': '#06b6d4',
     'Solar': '#f59e0b',
     'Interconnection': '#8b5cf6',
@@ -258,6 +259,7 @@ function getFuelClass(fuel) {
     if (fuel.includes('Hydro')) return 'hydro';
     if (fuel.includes('Gas') || fuel.includes('Natural')) return 'gas';
     if (fuel.includes('Coal') || fuel.includes('Pet')) return 'coal';
+    if (fuel.includes('Diesel') || fuel.includes('Bunker')) return 'diesel';
     if (fuel.includes('Wind')) return 'wind';
     if (fuel.includes('Solar')) return 'solar';
     return 'siepac';
@@ -471,21 +473,21 @@ function initScenarioControls() {
         }
     });
 
-    // Run power flow button
-    document.getElementById('btn-run-pf').addEventListener('click', runPowerFlowScenario);
-
-    // Stability buttons
-    document.getElementById('btn-run-n1').addEventListener('click', runContingencyAnalysis);
-    document.getElementById('btn-run-freq').addEventListener('click', runFrequencyAnalysis);
-    document.getElementById('btn-run-pv').addEventListener('click', runVoltageStability);
-
-    // Market buttons
-    document.getElementById('btn-run-lmp').addEventListener('click', runLMPAnalysis);
-    document.getElementById('btn-run-scenarios').addEventListener('click', runDemandScenarios);
-
-    // SIEPAC buttons
-    document.getElementById('btn-run-siepac').addEventListener('click', runSIEPACAnalysis);
-    document.getElementById('btn-run-transfer').addEventListener('click', runTransferAnalysis);
+    // Button click bindings
+    const btnBindings = [
+        ['btn-run-pf', runPowerFlowScenario],
+        ['btn-run-n1', runContingencyAnalysis],
+        ['btn-run-freq', runFrequencyAnalysis],
+        ['btn-run-pv', runVoltageStability],
+        ['btn-run-lmp', runLMPAnalysis],
+        ['btn-run-scenarios', runDemandScenarios],
+        ['btn-run-siepac', runSIEPACAnalysis],
+        ['btn-run-transfer', runTransferAnalysis],
+    ];
+    btnBindings.forEach(([id, handler]) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', handler);
+    });
 }
 
 // ============================================================
