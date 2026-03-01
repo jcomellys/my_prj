@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panama Power Grid Dashboard | SIN 230kV</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Dashboard Styles -->
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="header">
+    <div class="header-left">
+        <div class="header-logo">SIN Panama 230kV</div>
+        <div class="header-subtitle">
+            Sistema de Analisis en Tiempo Real de Flujos de Potencia<br>
+            Centro Nacional de Despacho (CND) - ETESA
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="status-indicator">
+            <span class="status-dot" id="ws-status"></span>
+            <span id="ws-status-text">Conectando...</span>
+        </div>
+        <div class="clock" id="clock">--:--:--</div>
+    </div>
+</header>
+
+<!-- ============ NAVIGATION ============ -->
+<nav class="nav-tabs">
+    <div class="nav-tab active" data-tab="overview">Vista General</div>
+    <div class="nav-tab" data-tab="powerflow">Flujo de Potencia</div>
+    <div class="nav-tab" data-tab="stability">Estabilidad</div>
+    <div class="nav-tab" data-tab="market">Mercado</div>
+    <div class="nav-tab" data-tab="scenarios">Escenarios</div>
+    <div class="nav-tab" data-tab="siepac">SIEPAC / Export</div>
+</nav>
+
+<!-- ============ KPI BAR ============ -->
+<div class="kpi-bar">
+    <div class="kpi-card">
+        <div class="kpi-label">Demanda Total</div>
+        <div class="kpi-value cyan" id="kpi-demand">--</div>
+        <div class="kpi-unit">MW</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Generacion Total</div>
+        <div class="kpi-value green" id="kpi-generation">--</div>
+        <div class="kpi-unit">MW</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Frecuencia</div>
+        <div class="kpi-value blue" id="kpi-frequency">--</div>
+        <div class="kpi-unit">Hz</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Perdidas</div>
+        <div class="kpi-value yellow" id="kpi-losses">--</div>
+        <div class="kpi-unit">MW</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">SIEPAC</div>
+        <div class="kpi-value purple" id="kpi-siepac">--</div>
+        <div class="kpi-unit">MW</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Costo Marginal</div>
+        <div class="kpi-value yellow" id="kpi-marginal-cost">--</div>
+        <div class="kpi-unit">USD/MWh</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Estado N-1</div>
+        <div class="kpi-value green" id="kpi-n1-status">--</div>
+        <div class="kpi-unit" id="kpi-n1-detail"></div>
+    </div>
+</div>
+
+<!-- ============ MAIN CONTENT ============ -->
+<div class="main-content">
+
+    <!-- ==== TAB: OVERVIEW ==== -->
+    <div class="tab-content active" id="tab-overview">
+        <div class="grid-map-side">
+            <!-- Map -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Mapa del Sistema Interconectado Nacional - 230kV</span>
+                    <span class="panel-badge badge-blue">27 Nodos</span>
+                </div>
+                <div class="panel-body no-padding">
+                    <div id="map-container"></div>
+                </div>
+            </div>
+
+            <!-- Side panels -->
+            <div style="display:flex;flex-direction:column;gap:16px;">
+                <!-- Generation Mix -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Mix de Generacion</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="chart-container short">
+                            <canvas id="chart-gen-mix"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alerts -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Alertas del Sistema</span>
+                        <span class="panel-badge badge-green" id="alert-count">0</span>
+                    </div>
+                    <div class="panel-body" id="alerts-container">
+                        <div class="alert-box info">Sistema operando normalmente</div>
+                    </div>
+                </div>
+
+                <!-- Voltage profile -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Perfil de Voltaje</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="chart-container short">
+                            <canvas id="chart-voltage-profile"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom row -->
+        <div class="grid-2col">
+            <!-- Load curve -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Curva de Demanda (24h)</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="chart-load-curve"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generation by plant -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Generacion por Planta</span>
+                </div>
+                <div class="panel-body no-padding">
+                    <div class="table-scroll" style="max-height:280px;">
+                        <table class="data-table" id="table-generation">
+                            <thead>
+                                <tr>
+                                    <th>Planta</th>
+                                    <th>Tipo</th>
+                                    <th class="num">Capacidad</th>
+                                    <th class="num">Salida MW</th>
+                                    <th class="num">%</th>
+                                </tr>
+                            </thead>
+                            <tbody id="generation-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==== TAB: POWER FLOW ==== -->
+    <div class="tab-content" id="tab-powerflow">
+        <!-- Scenario controls -->
+        <div class="scenario-controls">
+            <div class="control-group">
+                <label class="control-label">Factor de Carga</label>
+                <input type="range" id="pf-load-factor" min="0.4" max="1.5" step="0.05" value="1.0">
+                <span class="control-value" id="pf-load-value">1.00</span>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Hidro Disponible</label>
+                <input type="range" id="pf-hydro-factor" min="0.0" max="1.5" step="0.1" value="1.0">
+                <span class="control-value" id="pf-hydro-value">1.00</span>
+            </div>
+            <div class="control-group">
+                <label class="control-label">SIEPAC (MW)</label>
+                <input type="range" id="pf-siepac" min="-300" max="300" step="25" value="0">
+                <span class="control-value" id="pf-siepac-value">0 MW</span>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Factor Eolico</label>
+                <input type="range" id="pf-wind-factor" min="0.0" max="1.5" step="0.1" value="1.0">
+                <span class="control-value" id="pf-wind-value">1.00</span>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Factor Solar</label>
+                <input type="range" id="pf-solar-factor" min="0.0" max="1.5" step="0.1" value="1.0">
+                <span class="control-value" id="pf-solar-value">1.00</span>
+            </div>
+            <div class="control-group" style="justify-content:flex-end;">
+                <button class="btn btn-primary" id="btn-run-pf">Ejecutar Flujo de Potencia</button>
+            </div>
+        </div>
+
+        <div class="grid-2col">
+            <!-- Bus results -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Resultados por Nodo</span>
+                    <span class="panel-badge badge-blue" id="pf-status">Pendiente</span>
+                </div>
+                <div class="panel-body no-padding">
+                    <div class="table-scroll" style="max-height:450px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Nodo</th>
+                                    <th>Provincia</th>
+                                    <th class="num">V (pu)</th>
+                                    <th class="num">Ang (deg)</th>
+                                    <th class="num">P iny (MW)</th>
+                                    <th class="num">Q iny (MVAr)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pf-bus-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Line flows -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Flujos en Lineas</span>
+                </div>
+                <div class="panel-body no-padding">
+                    <div class="table-scroll" style="max-height:450px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Linea</th>
+                                    <th class="num">P (MW)</th>
+                                    <th class="num">Q (MVAr)</th>
+                                    <th class="num">Perd (MW)</th>
+                                    <th class="num">Carga %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pf-line-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2col">
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Perfil de Voltaje por Nodo</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="chart-pf-voltage"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Carga de Lineas (%)</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="chart-pf-loading"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==== TAB: STABILITY ==== -->
+    <div class="tab-content" id="tab-stability">
+        <div class="grid-2col">
+            <!-- Contingency summary -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Analisis de Contingencia N-1</span>
+                    <button class="btn btn-secondary" id="btn-run-n1">Ejecutar N-1</button>
+                </div>
+                <div class="panel-body no-padding">
+                    <div class="table-scroll" style="max-height:400px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Contingencia</th>
+                                    <th>Severidad</th>
+                                    <th>Convergencia</th>
+                                    <th>Violaciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="n1-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frequency stability -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Estabilidad de Frecuencia</span>
+                    <button class="btn btn-secondary" id="btn-run-freq">Analizar</button>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="chart-frequency"></canvas>
+                    </div>
+                    <div id="freq-details" style="margin-top:12px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2col">
+            <!-- Voltage stability P-V curves -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Curvas P-V (Estabilidad de Voltaje)</span>
+                    <button class="btn btn-secondary" id="btn-run-pv">Generar Curvas</button>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container tall">
+                        <canvas id="chart-pv-curves"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- V-Q Sensitivity -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Sensibilidad V-Q</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container tall">
+                        <canvas id="chart-vq-sensitivity"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==== TAB: MARKET ==== -->
+    <div class="tab-content" id="tab-market">
+        <div class="grid-2col">
+            <!-- LMP Map -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Precios Marginales Locales (LMP)</span>
+                    <button class="btn btn-secondary" id="btn-run-lmp">Calcular LMP</button>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container tall">
+                        <canvas id="chart-lmp"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Merit Order -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Orden de Merito (Despacho)</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container tall">
+                        <canvas id="chart-merit-order"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2col">
+            <!-- MER Regional Prices -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Precios Regionales MER</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="chart-mer-prices"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dispatch table -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Tabla de Despacho</span>
+                </div>
+                <div class="panel-body no-padding">
+                    <div class="table-scroll" style="max-height:300px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Planta</th>
+                                    <th>Tipo</th>
+                                    <th class="num">Despacho MW</th>
+                                    <th class="num">Costo $/MWh</th>
+                                    <th class="num">Costo Total $/h</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dispatch-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==== TAB: SCENARIOS ==== -->
+    <div class="tab-content" id="tab-scenarios">
+        <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-header">
+                <span class="panel-title">Analisis de Escenarios de Demanda</span>
+                <button class="btn btn-primary" id="btn-run-scenarios">Ejecutar Todos los Escenarios</button>
+            </div>
+        </div>
+
+        <div class="grid-3col" id="scenarios-grid">
+            <div class="loading-overlay"><span class="spinner"></span> Presione "Ejecutar" para analizar escenarios</div>
+        </div>
+
+        <div class="grid-2col" style="margin-top:16px;">
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Comparacion de Costos por Escenario</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="chart-scenario-costs"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Mix Energetico por Escenario</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="chart-scenario-mix"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==== TAB: SIEPAC ==== -->
+    <div class="tab-content" id="tab-siepac">
+        <div class="grid-2col">
+            <!-- Export analysis -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Analisis de Exportacion SIEPAC</span>
+                    <button class="btn btn-primary" id="btn-run-siepac">Analizar</button>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container tall">
+                        <canvas id="chart-siepac-analysis"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Optimal export -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Beneficio Neto vs. Nivel de Exportacion</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container tall">
+                        <canvas id="chart-siepac-benefit"></canvas>
+                    </div>
+                    <div id="siepac-recommendation" style="margin-top:12px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2col">
+            <!-- Transfer capability -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Capacidad de Transferencia Oeste-Este</span>
+                    <button class="btn btn-secondary" id="btn-run-transfer">Calcular</button>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="chart-transfer"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Regional context -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Contexto Regional MER</span>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-container">
+                        <canvas id="chart-regional-prices"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Dashboard JavaScript -->
+<script src="/js/dashboard.js"></script>
+
+</body>
+</html>
