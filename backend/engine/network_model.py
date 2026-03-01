@@ -138,7 +138,8 @@ def build_panama_network():
             province="Bocas del Toro"),
 
         Bus(9, "Caldera", BusType.PV, SubstationType.REDUCTORA,
-            p_gen_mw=60, v_mag_pu=1.02,
+            p_gen_mw=118, v_mag_pu=1.02,
+            q_max_mvar=60, q_min_mvar=-30,
             p_load_mw=15, q_load_mvar=6,
             latitude=8.6800, longitude=-82.3200,
             province="Chiriquí"),
@@ -169,7 +170,8 @@ def build_panama_network():
             province="Coclé"),
 
         Bus(15, "Guasquitas", BusType.PV, SubstationType.SECCIONADORA,
-            p_gen_mw=120, v_mag_pu=1.03,
+            p_gen_mw=350, v_mag_pu=1.03,
+            q_max_mvar=200, q_min_mvar=-100,
             latitude=8.6700, longitude=-82.1500,
             province="Chiriquí"),
 
@@ -216,14 +218,14 @@ def build_panama_network():
             province="Panamá"),
 
         Bus(24, "BLM (Bahía Las Minas)", BusType.PV, SubstationType.GENERACION,
-            p_gen_mw=180, v_mag_pu=1.01,
-            q_max_mvar=100, q_min_mvar=-50,
+            p_gen_mw=255, v_mag_pu=1.01,
+            q_max_mvar=130, q_min_mvar=-65,
             latitude=9.3700, longitude=-79.8500,
             province="Colón"),
 
         Bus(25, "Costa Norte (AES/Gatún)", BusType.PV, SubstationType.GENERACION,
-            p_gen_mw=380, v_mag_pu=1.03,
-            q_max_mvar=200, q_min_mvar=-100,
+            p_gen_mw=490, v_mag_pu=1.03,
+            q_max_mvar=260, q_min_mvar=-130,
             latitude=9.2800, longitude=-79.9200,
             province="Colón"),
 
@@ -400,79 +402,328 @@ def build_panama_network():
     ]
 
     generators = [
-        # === HYDRO (Western Region) ===
+        # ============================================================
+        # HYDROELECTRIC - Western Region (Chiriquí / Bocas del Toro)
+        # Total: ~1,214 MW
+        # ============================================================
         Generator(1, "C.H. Fortuna (ENEL)", 22, "Hydro",
                   p_max_mw=300, p_min_mw=30,
                   q_max_mvar=150, q_min_mvar=-80,
                   cost_per_mwh=15.0, inertia_constant_h=4.5),
 
-        Generator(2, "C.H. Caldera", 9, "Hydro",
-                  p_max_mw=60, p_min_mw=5,
-                  q_max_mvar=30, q_min_mvar=-15,
-                  cost_per_mwh=18.0, inertia_constant_h=3.5),
-
-        Generator(3, "C.H. Changuinola (AES Changuinola)", 8, "Hydro",
-                  p_max_mw=223, p_min_mw=20,
-                  q_max_mvar=110, q_min_mvar=-50,
-                  cost_per_mwh=12.0, inertia_constant_h=4.0),
-
-        Generator(4, "C.H. Bonyic", 8, "Hydro",
-                  p_max_mw=31, p_min_mw=3,
-                  q_max_mvar=15, q_min_mvar=-8,
-                  cost_per_mwh=14.0, inertia_constant_h=3.0),
-
-        Generator(5, "C.H. Estí", 15, "Hydro",
+        Generator(2, "C.H. Estí (AES)", 15, "Hydro",
                   p_max_mw=120, p_min_mw=10,
                   q_max_mvar=60, q_min_mvar=-30,
                   cost_per_mwh=16.0, inertia_constant_h=4.0),
 
-        Generator(6, "C.H. Los Valles", 15, "Hydro",
+        Generator(3, "C.H. Changuinola I (AES)", 8, "Hydro",
+                  p_max_mw=221, p_min_mw=20,
+                  q_max_mvar=110, q_min_mvar=-50,
+                  cost_per_mwh=12.0, inertia_constant_h=4.0),
+
+        Generator(4, "C.H. Changuinola Mini-Hidro", 8, "Hydro",
+                  p_max_mw=10, p_min_mw=1,
+                  q_max_mvar=5, q_min_mvar=-3,
+                  cost_per_mwh=13.0, inertia_constant_h=2.0),
+
+        Generator(5, "C.H. Bonyic", 8, "Hydro",
+                  p_max_mw=32, p_min_mw=3,
+                  q_max_mvar=16, q_min_mvar=-8,
+                  cost_per_mwh=14.0, inertia_constant_h=3.0),
+
+        Generator(6, "C.H. La Estrella (AES)", 15, "Hydro",
+                  p_max_mw=48, p_min_mw=5,
+                  q_max_mvar=24, q_min_mvar=-12,
+                  cost_per_mwh=17.0, inertia_constant_h=3.5),
+
+        Generator(7, "C.H. Los Valles (AES)", 15, "Hydro",
                   p_max_mw=54, p_min_mw=5,
                   q_max_mvar=27, q_min_mvar=-13,
                   cost_per_mwh=17.0, inertia_constant_h=3.5),
 
-        # === HYDRO (Eastern Region) ===
-        Generator(7, "C.H. Bayano", 23, "Hydro",
+        Generator(8, "C.H. Caldera", 9, "Hydro",
+                  p_max_mw=60, p_min_mw=5,
+                  q_max_mvar=30, q_min_mvar=-15,
+                  cost_per_mwh=18.0, inertia_constant_h=3.5),
+
+        # Cuenca Río Chiriquí Viejo - connected via Guasquitas/Caldera
+        Generator(9, "C.H. El Alto", 15, "Hydro",
+                  p_max_mw=72, p_min_mw=7,
+                  q_max_mvar=36, q_min_mvar=-18,
+                  cost_per_mwh=16.0, inertia_constant_h=3.5),
+
+        Generator(10, "C.H. Bajo Mina", 15, "Hydro",
+                  p_max_mw=57, p_min_mw=5,
+                  q_max_mvar=28, q_min_mvar=-14,
+                  cost_per_mwh=16.5, inertia_constant_h=3.5),
+
+        Generator(11, "C.H. Monte Lirio", 15, "Hydro",
+                  p_max_mw=52, p_min_mw=5,
+                  q_max_mvar=26, q_min_mvar=-13,
+                  cost_per_mwh=17.0, inertia_constant_h=3.0),
+
+        Generator(12, "C.H. Pando", 9, "Hydro",
+                  p_max_mw=33, p_min_mw=3,
+                  q_max_mvar=16, q_min_mvar=-8,
+                  cost_per_mwh=17.5, inertia_constant_h=3.0),
+
+        Generator(13, "C.H. Lorena (Alternegy)", 10, "Hydro",
+                  p_max_mw=34, p_min_mw=3,
+                  q_max_mvar=17, q_min_mvar=-8,
+                  cost_per_mwh=18.0, inertia_constant_h=3.0),
+
+        Generator(14, "C.H. Gualaca", 10, "Hydro",
+                  p_max_mw=32, p_min_mw=3,
+                  q_max_mvar=16, q_min_mvar=-8,
+                  cost_per_mwh=18.0, inertia_constant_h=3.0),
+
+        Generator(15, "C.H. Macho de Monte", 10, "Hydro",
+                  p_max_mw=9, p_min_mw=1,
+                  q_max_mvar=5, q_min_mvar=-3,
+                  cost_per_mwh=20.0, inertia_constant_h=2.5),
+
+        Generator(16, "C.H. Concepción", 10, "Hydro",
+                  p_max_mw=11, p_min_mw=1,
+                  q_max_mvar=5, q_min_mvar=-3,
+                  cost_per_mwh=19.0, inertia_constant_h=2.5),
+
+        Generator(17, "C.H. Cochea (Alto Valle)", 9, "Hydro",
+                  p_max_mw=12, p_min_mw=1,
+                  q_max_mvar=6, q_min_mvar=-3,
+                  cost_per_mwh=19.0, inertia_constant_h=2.5),
+
+        Generator(18, "C.H. Dolega", 10, "Hydro",
+                  p_max_mw=3, p_min_mw=0,
+                  q_max_mvar=2, q_min_mvar=-1,
+                  cost_per_mwh=22.0, inertia_constant_h=2.0),
+
+        Generator(19, "C.H. Paso Ancho", 9, "Hydro",
+                  p_max_mw=7, p_min_mw=1,
+                  q_max_mvar=3, q_min_mvar=-2,
+                  cost_per_mwh=20.0, inertia_constant_h=2.5),
+
+        Generator(20, "C.H. Bajos del Totuma", 9, "Hydro",
+                  p_max_mw=6, p_min_mw=1,
+                  q_max_mvar=3, q_min_mvar=-2,
+                  cost_per_mwh=21.0, inertia_constant_h=2.0),
+
+        # ============================================================
+        # HYDROELECTRIC - Central Region (Veraguas / Coclé)
+        # ============================================================
+        Generator(21, "C.H. La Yeguada", 11, "Hydro",
+                  p_max_mw=7, p_min_mw=1,
+                  q_max_mvar=3, q_min_mvar=-2,
+                  cost_per_mwh=20.0, inertia_constant_h=2.5),
+
+        Generator(22, "C.H. Pedregalito I/II", 16, "Hydro",
+                  p_max_mw=20, p_min_mw=2,
+                  q_max_mvar=10, q_min_mvar=-5,
+                  cost_per_mwh=19.0, inertia_constant_h=2.5),
+
+        Generator(23, "C.H. Los Planetas", 12, "Hydro",
+                  p_max_mw=5, p_min_mw=0,
+                  q_max_mvar=3, q_min_mvar=-1,
+                  cost_per_mwh=21.0, inertia_constant_h=2.0),
+
+        Generator(24, "C.H. El Fraile", 16, "Hydro",
+                  p_max_mw=4, p_min_mw=0,
+                  q_max_mvar=2, q_min_mvar=-1,
+                  cost_per_mwh=22.0, inertia_constant_h=2.0),
+
+        Generator(25, "C.H. Antón I/II/III", 17, "Hydro",
+                  p_max_mw=10, p_min_mw=1,
+                  q_max_mvar=5, q_min_mvar=-3,
+                  cost_per_mwh=20.0, inertia_constant_h=2.0),
+
+        Generator(26, "C.H. Hidros Coclé (Agr.)", 4, "Hydro",
+                  p_max_mw=15, p_min_mw=1,
+                  q_max_mvar=8, q_min_mvar=-4,
+                  cost_per_mwh=20.0, inertia_constant_h=2.5),
+
+        # ============================================================
+        # HYDROELECTRIC - Eastern Region (Panamá)
+        # ============================================================
+        Generator(27, "C.H. Bayano (AES)", 23, "Hydro",
                   p_max_mw=260, p_min_mw=25,
                   q_max_mvar=130, q_min_mvar=-60,
                   cost_per_mwh=14.0, inertia_constant_h=4.5),
 
-        # === THERMAL (Colón) ===
-        Generator(8, "C.T. Bahía Las Minas (BLM)", 24, "Coal/Pet Coke",
-                  p_max_mw=180, p_min_mw=60,
-                  q_max_mvar=100, q_min_mvar=-50,
-                  cost_per_mwh=65.0, inertia_constant_h=5.0),
+        # Autogeneración Canal de Panamá (inyecta excedentes al SIN)
+        Generator(28, "C.H. Gatún (ACP)", 25, "Hydro",
+                  p_max_mw=36, p_min_mw=5,
+                  q_max_mvar=18, q_min_mvar=-9,
+                  cost_per_mwh=10.0, inertia_constant_h=3.5),
 
-        Generator(9, "C.T. Costa Norte (GNL/Gas)", 25, "Natural Gas",
-                  p_max_mw=380, p_min_mw=100,
+        Generator(29, "C.H. Madden (ACP)", 17, "Hydro",
+                  p_max_mw=36, p_min_mw=5,
+                  q_max_mvar=18, q_min_mvar=-9,
+                  cost_per_mwh=10.0, inertia_constant_h=3.5),
+
+        # ============================================================
+        # THERMAL - Gas Natural (GNL)
+        # Total: ~600 MW
+        # ============================================================
+        Generator(30, "C.T. Costa Norte (AES GNL)", 25, "Natural Gas",
+                  p_max_mw=381, p_min_mw=100,
                   q_max_mvar=200, q_min_mvar=-100,
                   cost_per_mwh=48.0, inertia_constant_h=5.5),
 
-        # === THERMAL (Panama City area) ===
-        Generator(10, "C.T. Pacora (Gas)", 27, "Natural Gas",
+        Generator(31, "C.T. Generadora Gatún (GNL)", 25, "Natural Gas",
+                  p_max_mw=72, p_min_mw=20,
+                  q_max_mvar=36, q_min_mvar=-18,
+                  cost_per_mwh=50.0, inertia_constant_h=5.0),
+
+        Generator(32, "C.T. Termo Colón (GENA CC)", 19, "Natural Gas",
+                  p_max_mw=150, p_min_mw=40,
+                  q_max_mvar=75, q_min_mvar=-38,
+                  cost_per_mwh=52.0, inertia_constant_h=5.0),
+
+        # ============================================================
+        # THERMAL - Carbon / Pet Coke
+        # ============================================================
+        Generator(33, "C.T. BLM Vapor (Carbón)", 24, "Coal/Pet Coke",
+                  p_max_mw=120, p_min_mw=40,
+                  q_max_mvar=60, q_min_mvar=-30,
+                  cost_per_mwh=65.0, inertia_constant_h=5.0),
+
+        # ============================================================
+        # THERMAL - Bunker / Diesel (MCI y Turbinas)
+        # Total: ~850 MW
+        # ============================================================
+        Generator(34, "C.T. BLM Cativá (MCI)", 24, "Diesel/Bunker",
+                  p_max_mw=87, p_min_mw=25,
+                  q_max_mvar=44, q_min_mvar=-22,
+                  cost_per_mwh=90.0, inertia_constant_h=4.0),
+
+        Generator(35, "C.T. Pacora/Pedregal Power", 27, "Diesel/Bunker",
                   p_max_mw=55, p_min_mw=15,
                   q_max_mvar=28, q_min_mvar=-14,
-                  cost_per_mwh=55.0, inertia_constant_h=4.0),
+                  cost_per_mwh=95.0, inertia_constant_h=4.0),
 
-        # === WIND ===
-        Generator(11, "P.E. Penonomé (Vientos)", 14, "Wind",
+        Generator(36, "C.T. COPESA", 27, "Diesel/Bunker",
+                  p_max_mw=40, p_min_mw=10,
+                  q_max_mvar=20, q_min_mvar=-10,
+                  cost_per_mwh=100.0, inertia_constant_h=3.5),
+
+        Generator(37, "C.T. Pan-Am Generating", 3, "Diesel/Bunker",
+                  p_max_mw=60, p_min_mw=15,
+                  q_max_mvar=30, q_min_mvar=-15,
+                  cost_per_mwh=92.0, inertia_constant_h=4.0),
+
+        Generator(38, "C.T. Térmica del Caribe (Giral)", 24, "Diesel/Bunker",
+                  p_max_mw=48, p_min_mw=12,
+                  q_max_mvar=24, q_min_mvar=-12,
+                  cost_per_mwh=88.0, inertia_constant_h=4.0),
+
+        Generator(39, "C.T. Tropitérmica", 1, "Diesel/Bunker",
+                  p_max_mw=40, p_min_mw=10,
+                  q_max_mvar=20, q_min_mvar=-10,
+                  cost_per_mwh=96.0, inertia_constant_h=3.5),
+
+        Generator(40, "C.T. IDB Chilibre", 20, "Diesel/Bunker",
+                  p_max_mw=30, p_min_mw=8,
+                  q_max_mvar=15, q_min_mvar=-8,
+                  cost_per_mwh=98.0, inertia_constant_h=3.5),
+
+        # Canal de Panamá - Térmicas (autogeneración con excedentes al SIN)
+        Generator(41, "C.T. Miraflores (ACP)", 1, "Diesel/Bunker",
+                  p_max_mw=80, p_min_mw=20,
+                  q_max_mvar=40, q_min_mvar=-20,
+                  cost_per_mwh=85.0, inertia_constant_h=4.5),
+
+        Generator(42, "C.T. ACP Térmica Adicional", 20, "Diesel/Bunker",
+                  p_max_mw=152, p_min_mw=40,
+                  q_max_mvar=76, q_min_mvar=-38,
+                  cost_per_mwh=88.0, inertia_constant_h=4.5),
+
+        # Térmicas menores distribuidas (agregado)
+        Generator(43, "C.T. Dist. Panamá (Agr.)", 2, "Diesel/Bunker",
+                  p_max_mw=80, p_min_mw=20,
+                  q_max_mvar=40, q_min_mvar=-20,
+                  cost_per_mwh=105.0, inertia_constant_h=3.5),
+
+        Generator(44, "C.T. Dist. Colón (Agr.)", 19, "Diesel/Bunker",
+                  p_max_mw=60, p_min_mw=15,
+                  q_max_mvar=30, q_min_mvar=-15,
+                  cost_per_mwh=102.0, inertia_constant_h=3.5),
+
+        Generator(45, "C.T. Dist. Interior (Agr.)", 4, "Diesel/Bunker",
+                  p_max_mw=50, p_min_mw=10,
+                  q_max_mvar=25, q_min_mvar=-12,
+                  cost_per_mwh=110.0, inertia_constant_h=3.0),
+
+        # ============================================================
+        # WIND - Eólica
+        # Total: ~336 MW
+        # ============================================================
+        Generator(46, "P.E. Penonomé I/II/III", 14, "Wind",
                   p_max_mw=215, p_min_mw=0,
                   q_max_mvar=50, q_min_mvar=-50,
                   cost_per_mwh=0.0, inertia_constant_h=0.0),
 
-        # === SOLAR ===
-        Generator(12, "P.S. Coclé Solar", 13, "Solar",
-                  p_max_mw=100, p_min_mw=0,
-                  q_max_mvar=30, q_min_mvar=-30,
+        Generator(47, "P.E. Toabré Fase I", 14, "Wind",
+                  p_max_mw=66, p_min_mw=0,
+                  q_max_mvar=16, q_min_mvar=-16,
                   cost_per_mwh=0.0, inertia_constant_h=0.0),
 
-        Generator(13, "P.S. Chiriquí Solar", 10, "Solar",
+        Generator(48, "P.E. AES Eólica (Nuevoleón)", 14, "Wind",
+                  p_max_mw=55, p_min_mw=0,
+                  q_max_mvar=14, q_min_mvar=-14,
+                  cost_per_mwh=0.0, inertia_constant_h=0.0),
+
+        # ============================================================
+        # SOLAR - Fotovoltaica
+        # Total: ~696 MW (49 instalaciones al cierre 2024)
+        # ============================================================
+        Generator(49, "P.S. Penonomé Solar (Avanzalia)", 13, "Solar",
+                  p_max_mw=120, p_min_mw=0,
+                  q_max_mvar=36, q_min_mvar=-36,
+                  cost_per_mwh=0.0, inertia_constant_h=0.0),
+
+        Generator(50, "P.S. Ecosolares (EISA)", 4, "Solar",
                   p_max_mw=50, p_min_mw=0,
                   q_max_mvar=15, q_min_mvar=-15,
                   cost_per_mwh=0.0, inertia_constant_h=0.0),
 
-        # === SIEPAC Import/Export (modeled as generator) ===
-        Generator(14, "SIEPAC Import/Export", 26, "Interconnection",
+        Generator(51, "P.S. Baco (Enel)", 10, "Solar",
+                  p_max_mw=30, p_min_mw=0,
+                  q_max_mvar=9, q_min_mvar=-9,
+                  cost_per_mwh=0.0, inertia_constant_h=0.0),
+
+        Generator(52, "P.S. Madre Vieja (Enel)", 10, "Solar",
+                  p_max_mw=30, p_min_mw=0,
+                  q_max_mvar=9, q_min_mvar=-9,
+                  cost_per_mwh=0.0, inertia_constant_h=0.0),
+
+        Generator(53, "P.S. AES Solar (4 parques)", 4, "Solar",
+                  p_max_mw=40, p_min_mw=0,
+                  q_max_mvar=12, q_min_mvar=-12,
+                  cost_per_mwh=0.0, inertia_constant_h=0.0),
+
+        Generator(54, "P.S. Dist. Coclé/Herrera (Agr.)", 17, "Solar",
+                  p_max_mw=130, p_min_mw=0,
+                  q_max_mvar=39, q_min_mvar=-39,
+                  cost_per_mwh=0.0, inertia_constant_h=0.0),
+
+        Generator(55, "P.S. Dist. Chiriquí/Veraguas (Agr.)", 16, "Solar",
+                  p_max_mw=100, p_min_mw=0,
+                  q_max_mvar=30, q_min_mvar=-30,
+                  cost_per_mwh=0.0, inertia_constant_h=0.0),
+
+        Generator(56, "P.S. Dist. Panamá (Agr.)", 1, "Solar",
+                  p_max_mw=90, p_min_mw=0,
+                  q_max_mvar=27, q_min_mvar=-27,
+                  cost_per_mwh=0.0, inertia_constant_h=0.0),
+
+        Generator(57, "P.S. Dist. Azuero/Colón (Agr.)", 19, "Solar",
+                  p_max_mw=106, p_min_mw=0,
+                  q_max_mvar=32, q_min_mvar=-32,
+                  cost_per_mwh=0.0, inertia_constant_h=0.0),
+
+        # ============================================================
+        # SIEPAC Interconnection (Import/Export)
+        # ============================================================
+        Generator(58, "SIEPAC Import/Export", 26, "Interconnection",
                   p_max_mw=300, p_min_mw=-300,
                   q_max_mvar=100, q_min_mvar=-100,
                   cost_per_mwh=40.0, inertia_constant_h=0.0),
