@@ -239,32 +239,79 @@ function updateKPIs(data) {
 }
 
 // ============================================================
-// DATA SOURCE INDICATOR
+// DATA SOURCE INDICATOR & DEGRADED STATE
 // ============================================================
 function updateDataSourceIndicator(data) {
     const dot = document.getElementById('data-source-dot');
     const text = document.getElementById('data-source-text');
+    const badge = document.getElementById('data-source-badge');
     const footerTs = document.getElementById('footer-cnd-timestamp');
     const footerSrc = document.getElementById('footer-data-source');
+    const banner = document.getElementById('degraded-banner');
 
-    const source = data.data_source || 'simulator';
+    const source = data.data_source || 'SIMULATOR';
     const cndTs = data.cnd_timestamp || '--';
+    const detail = data.data_source_detail || {};
+    const collector = data.collector_status || {};
 
     const sourceLabels = {
-        'live': 'CND en vivo',
-        'cache': 'Cache (CND)',
-        'simulator': 'Simulador',
+        'LIVE_CND': 'CND en vivo',
+        'CACHE': 'Cache (CND)',
+        'SIMULATOR': 'Simulador',
     };
     const sourceColors = {
-        'live': '#10b981',
-        'cache': '#f59e0b',
-        'simulator': '#6b7280',
+        'LIVE_CND': '#10b981',
+        'CACHE': '#f59e0b',
+        'SIMULATOR': '#ef4444',
+    };
+    const badgeClass = {
+        'LIVE_CND': 'live',
+        'CACHE': 'cache',
+        'SIMULATOR': 'simulator',
     };
 
     if (dot) dot.style.background = sourceColors[source] || '#6b7280';
     if (text) text.textContent = 'Fuente: ' + (sourceLabels[source] || source);
+    if (badge) {
+        badge.className = 'status-indicator data-source-badge ' + (badgeClass[source] || '');
+    }
     if (footerTs) footerTs.textContent = cndTs;
     if (footerSrc) footerSrc.textContent = sourceLabels[source] || source;
+
+    // Degraded state banner
+    if (banner) {
+        if (source === 'LIVE_CND') {
+            banner.style.display = 'none';
+        } else {
+            banner.style.display = 'flex';
+            const title = document.getElementById('degraded-title');
+            const detailEl = document.getElementById('degraded-detail');
+            const errorEl = document.getElementById('degraded-error');
+            const lastLiveEl = document.getElementById('degraded-last-live');
+
+            if (source === 'CACHE') {
+                banner.className = 'degraded-banner cache-mode';
+                if (title) title.textContent = 'MODO CACHE';
+                if (detailEl) detailEl.textContent = 'CND no disponible — sirviendo ultimo dato almacenado';
+            } else {
+                banner.className = 'degraded-banner';
+                if (title) title.textContent = 'MODO DEGRADADO — DATOS SIMULADOS';
+                if (detailEl) detailEl.textContent = 'Sin conexion al CND. Los valores mostrados NO son reales.';
+            }
+
+            if (errorEl && collector.last_error) {
+                errorEl.textContent = 'Error: ' + collector.last_error;
+            } else if (errorEl) {
+                errorEl.textContent = '';
+            }
+
+            if (lastLiveEl && collector.last_live_fetch) {
+                lastLiveEl.textContent = 'Ultimo dato vivo: ' + collector.last_live_fetch;
+            } else if (lastLiveEl) {
+                lastLiveEl.textContent = 'Sin datos vivos previos';
+            }
+        }
+    }
 }
 
 // ============================================================
@@ -301,6 +348,19 @@ function getFuelClass(fuel) {
 function updateAlertsFromRT(data) {
     const container = document.getElementById('alerts-container');
     const alerts = [];
+
+    // Data source alert — most important
+    const source = data.data_source || 'SIMULATOR';
+    if (source === 'SIMULATOR') {
+        const collector = data.collector_status || {};
+        let msg = 'DATOS SIMULADOS — sin conexion al CND';
+        if (collector.last_error) {
+            msg += ` (${collector.last_error})`;
+        }
+        alerts.push({level: 'critical', msg: msg});
+    } else if (source === 'CACHE') {
+        alerts.push({level: 'warning', msg: 'Fuente: Cache local — CND no disponible en este momento'});
+    }
 
     if (data.generation) {
         const freq = data.generation.frequency_hz;

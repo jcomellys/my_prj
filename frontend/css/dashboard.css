@@ -114,6 +114,92 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* ---- DEGRADED STATE BANNER ---- */
+.degraded-banner {
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.4);
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--accent-red);
+    animation: degraded-pulse 3s ease-in-out infinite;
+}
+
+@keyframes degraded-pulse {
+    0%, 100% { border-bottom-color: rgba(239, 68, 68, 0.4); }
+    50% { border-bottom-color: rgba(239, 68, 68, 0.8); }
+}
+
+.degraded-banner.cache-mode {
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0.05) 100%);
+    border-bottom-color: rgba(245, 158, 11, 0.4);
+    color: var(--accent-yellow);
+    animation: none;
+}
+
+.degraded-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid currentColor;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.degraded-content {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.degraded-content strong {
+    letter-spacing: 0.5px;
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.degraded-content span {
+    color: var(--text-secondary);
+}
+
+.degraded-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.data-source-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    transition: all 0.3s;
+}
+
+.data-source-badge.live {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.data-source-badge.cache {
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.data-source-badge.simulator {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.08);
+}
+
 /* ---- NAVIGATION TABS ---- */
 .nav-tabs {
     background: var(--bg-secondary);

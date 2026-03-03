@@ -36,13 +36,26 @@
             <span class="status-dot" id="ws-status"></span>
             <span id="ws-status-text">Conectando...</span>
         </div>
-        <div class="status-indicator" style="margin-left:12px;">
+        <div class="status-indicator data-source-badge" id="data-source-badge">
             <span class="status-dot" id="data-source-dot" style="background:#6b7280;"></span>
             <span id="data-source-text" style="font-size:0.7rem;">Fuente: --</span>
         </div>
         <div class="clock" id="clock">--:--:--</div>
     </div>
 </header>
+
+<!-- ============ DEGRADED STATE BANNER ============ -->
+<div class="degraded-banner" id="degraded-banner" style="display:none;">
+    <div class="degraded-icon">!</div>
+    <div class="degraded-content">
+        <strong id="degraded-title">MODO DEGRADADO</strong>
+        <span id="degraded-detail">Sin conexion al CND — datos simulados</span>
+    </div>
+    <div class="degraded-meta">
+        <span id="degraded-error"></span>
+        <span id="degraded-last-live"></span>
+    </div>
+</div>
 
 <!-- ============ NAVIGATION ============ -->
 <nav class="nav-tabs">

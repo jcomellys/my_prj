@@ -95,6 +95,7 @@ async def lifespan(app: FastAPI):
         collector = get_collector()
         collector.stop()
         collector_task.cancel()
+        await collector.close()
         logger.info("CND collector stopped")
 
 

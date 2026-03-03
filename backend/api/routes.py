@@ -39,29 +39,65 @@ from ..data.cache import get_cache
 
 router = APIRouter()
 
+# Data source labels used throughout the API and WebSocket
+SOURCE_LIVE = "LIVE_CND"
+SOURCE_CACHE = "CACHE"
+SOURCE_SIMULATOR = "SIMULATOR"
+
 
 def _get_realtime_generation():
     """
     Get generation data: prefer real CND data, fallback to simulator.
-    Returns (data_dict, source_label).
+
+    Always tags the response with an explicit data_source label
+    (LIVE_CND / CACHE / SIMULATOR) and includes degraded-state
+    diagnostics when falling back.
     """
     collector = get_collector()
+    status = collector.get_status()
+
+    # Priority 1: Live CND data
     live = collector.get_latest()
     if live is not None:
-        live["data_source"] = "live"
+        live["data_source"] = SOURCE_LIVE
+        live["data_source_detail"] = {
+            "label": SOURCE_LIVE,
+            "degraded": False,
+            "last_fetch": status["last_fetch"],
+            "cnd_timestamp": live.get("timestamp"),
+        }
         return live
 
-    # Fallback: try SQLite cache
+    # Priority 2: SQLite cache
     cache = get_cache()
     cached = cache.get_latest()
     if cached is not None:
-        cached["data_source"] = "cache"
+        cached["data_source"] = SOURCE_CACHE
+        cached["data_source_detail"] = {
+            "label": SOURCE_CACHE,
+            "degraded": True,
+            "reason": "CND live data unavailable, serving from cache",
+            "last_live_fetch": status.get("last_live_fetch"),
+            "last_error": status.get("last_error"),
+            "last_error_time": status.get("last_error_time"),
+            "consecutive_errors": status.get("consecutive_errors", 0),
+        }
         return cached
 
-    # Final fallback: simulator
+    # Priority 3: Simulator (degraded mode)
     sim = get_simulator()
     data = sim.get_generation_data()
-    data["data_source"] = "simulator"
+    data["data_source"] = SOURCE_SIMULATOR
+    data["data_source_detail"] = {
+        "label": SOURCE_SIMULATOR,
+        "degraded": True,
+        "reason": "No CND data available (live or cached). Using simulated data.",
+        "last_error": status.get("last_error"),
+        "last_error_time": status.get("last_error_time"),
+        "last_http_status": status.get("last_http_status"),
+        "consecutive_errors": status.get("consecutive_errors", 0),
+        "error_count": status.get("error_count", 0),
+    }
     return data
 
 
@@ -296,7 +332,7 @@ async def get_realtime_conditions():
 
 @router.get("/api/realtime/generation")
 async def get_realtime_generation():
-    """Get real-time generation data (CND live > cache > simulator)."""
+    """Get real-time generation data (LIVE_CND > CACHE > SIMULATOR)."""
     data = _get_realtime_generation()
     return JSONResponse(content=data)
 
@@ -322,12 +358,12 @@ async def get_load_history(hours: int = Query(24, ge=1, le=168)):
     history = cache.get_history(hours)
     if history:
         return JSONResponse(content={
-            "source": "cache",
+            "source": SOURCE_CACHE,
             "data": history,
         })
     sim = get_simulator()
     return JSONResponse(content={
-        "source": "simulator",
+        "source": SOURCE_SIMULATOR,
         "data": sim.get_historical_load(hours),
     })
 
@@ -371,13 +407,29 @@ async def get_cnd_fortuna():
     )
 
 
+@router.get("/api/cnd/flow")
+async def get_cnd_flow():
+    """Get the latest Flujo Occidente data from flow.html."""
+    collector = get_collector()
+    flow = collector.get_latest_flow()
+    if flow:
+        return JSONResponse(content={
+            "source": "CND/SITR (sitr.cnd.com.pa)",
+            "data": flow,
+        })
+    return JSONResponse(
+        status_code=503,
+        content={"error": "No flow data available yet"},
+    )
+
+
 @router.get("/api/cnd/history")
 async def get_cnd_history(hours: int = Query(24, ge=1, le=168)):
     """Get historical generation from the SQLite cache."""
     cache = get_cache()
     history = cache.get_history(hours)
     return JSONResponse(content={
-        "source": "cache",
+        "source": SOURCE_CACHE,
         "snapshots": len(history),
         "data": history,
     })
@@ -385,7 +437,7 @@ async def get_cnd_history(hours: int = Query(24, ge=1, le=168)):
 
 @router.get("/api/cnd/status")
 async def get_cnd_status():
-    """Get the CND collector health status."""
+    """Get the CND collector health status (full observability)."""
     collector = get_collector()
     cache = get_cache()
     status = collector.get_status()
@@ -436,18 +488,35 @@ async def websocket_realtime(websocket: WebSocket):
             voltages = sim.get_bus_voltages()
 
             # If CND data is live, override demand with real total
-            if generation.get("data_source") == "live":
+            if generation.get("data_source") == SOURCE_LIVE:
                 conditions["current_demand_mw"] = generation.get("total_demand_mw", conditions["current_demand_mw"])
+
+            # Collector status for frontend observability
+            collector = get_collector()
+            collector_status = collector.get_status()
+
+            # Flow data (Flujo Occidente)
+            flow_data = collector.get_latest_flow()
 
             update = {
                 "type": "realtime_update",
                 "timestamp": datetime.now().isoformat(),
-                "data_source": generation.get("data_source", "simulator"),
+                "data_source": generation.get("data_source", SOURCE_SIMULATOR),
+                "data_source_detail": generation.get("data_source_detail", {}),
                 "cnd_timestamp": generation.get("timestamp"),
                 "conditions": conditions,
                 "generation": generation,
                 "market": market,
                 "voltages": voltages,
+                "flow": flow_data,
+                "collector_status": {
+                    "consecutive_errors": collector_status.get("consecutive_errors", 0),
+                    "last_error": collector_status.get("last_error"),
+                    "last_error_time": collector_status.get("last_error_time"),
+                    "last_http_status": collector_status.get("last_http_status"),
+                    "last_live_fetch": collector_status.get("last_live_fetch"),
+                    "fetch_count": collector_status.get("fetch_count", 0),
+                },
             }
 
             await websocket.send_json(update)
