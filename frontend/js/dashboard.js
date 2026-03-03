@@ -169,6 +169,14 @@ function populateMap(data) {
 
         busMarkers[bus.id] = marker;
     });
+
+    // Auto-fit map to show all buses
+    if (data.buses.length > 0) {
+        const bounds = L.latLngBounds(
+            data.buses.map(b => [b.latitude, b.longitude])
+        );
+        map.fitBounds(bounds, { padding: [30, 30] });
+    }
 }
 
 function getBusColor(bus) {
@@ -406,7 +414,8 @@ async function loadInitialData() {
         ]);
 
         createGenMixChart(genData);
-        createLoadCurveChart(histData);
+        // histData is {source, data} — unwrap .data for chart
+        createLoadCurveChart(histData.data || histData);
         createVoltageProfileChart(pfData);
         updatePowerFlowResults(pfData);
         updateGenerationTable(genData);

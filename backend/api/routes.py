@@ -445,6 +445,17 @@ async def get_cnd_status():
     return JSONResponse(content=status)
 
 
+@router.get("/api/cnd/debug")
+async def get_cnd_debug():
+    """Full diagnostic: raw HTML preview, parse results, plant counts.
+
+    Use this endpoint to inspect exactly what the SITR page returns
+    and how the parser interprets it.
+    """
+    collector = get_collector()
+    return JSONResponse(content=collector.get_debug_info())
+
+
 # ============================================================
 # WEBSOCKET FOR REAL-TIME UPDATES
 # ============================================================

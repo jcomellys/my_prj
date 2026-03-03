@@ -5,10 +5,6 @@ Fetches and parses real-time generation data from:
   https://sitr.cnd.com.pa/m/pub/gen.html
   https://sitr.cnd.com.pa/m/pub/flow.html  (Flujo Occidente)
 
-The page publishes generation data as text within HTML, organized by
-sections (Hidroeléctricas, Térmicas, Solares, Eólicas) with individual
-unit-level detail (e.g. "Fortuna 1", "Fortuna 2", "Fortuna 3").
-
 Architecture:
   [CND / SITR]  -->  [This collector, every 30-60s]  -->  [SQLite cache]
   Your app reads from the cache, never hitting CND directly on each request.
@@ -35,7 +31,7 @@ FLOW_URL = "https://sitr.cnd.com.pa/m/pub/flow.html"
 MIN_REASONABLE_MW = 300
 MAX_REASONABLE_MW = 4000
 
-# Map section headers from the HTML to internal keys
+# Map section headers from the HTML to internal keys (case-insensitive variants)
 SECTION_MAP = {
     "Hidroeléctricas (MW)": "hidro",
     "Hidroelectricas (MW)": "hidro",
@@ -46,10 +42,13 @@ SECTION_MAP = {
     "Eolicas (MW)": "eolica",
 }
 
-# Headers that signal the end of a section (totals, subtotals, etc.)
+# Lowercase variants for fuzzy matching
+SECTION_MAP_LOWER = {k.lower(): v for k, v in SECTION_MAP.items()}
+
+# Headers that signal the end of a section
 SECTION_TERMINATORS = {"Total", "Subtotal", "TOTAL", "Total SIN"}
 
-# Persistent session headers — mimic a real browser visiting the SITR
+# Persistent session headers
 REQUEST_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -62,7 +61,33 @@ REQUEST_HEADERS = {
     "Connection": "keep-alive",
 }
 
-# Directory for raw HTML dumps on failures
+# Known plant capacities (MW) for enriching CND data
+KNOWN_CAPACITIES = {
+    # Hydro
+    "fortuna": 300, "fortuna 1": 100, "fortuna 2": 100, "fortuna 3": 100,
+    "bayano": 260, "bayano 1": 130, "bayano 2": 130,
+    "changuinola": 221, "chan 75": 221, "chan-75": 221,
+    "estí": 120, "esti": 120, "el alto": 72,
+    "caldera": 60, "bajo mina": 57, "los valles": 54,
+    "monte lirio": 52, "la estrella": 48, "bonyic": 32,
+    "lorena": 34, "pando": 33, "gualaca": 32,
+    "barro blanco": 29, "algarrobos": 10,
+    "gatún": 36, "madden": 36, "miraflores": 10,
+    "proyecto gatún 1": 18, "proyecto gatún 2": 18,
+    # Thermal
+    "costa norte": 381, "costa norte 1": 190, "costa norte 2": 191,
+    "termo colón": 150, "termocolon": 150, "gena": 150,
+    "generadora gatún": 72, "cobre panamá": 300, "cobre panama": 300,
+    "cobre panamá 1": 150, "cobre panama 1": 150,
+    "cobre panamá 2": 150, "cobre panama 2": 150,
+    "blm": 120, "bahía las minas": 120,
+    "pan-am": 60, "pacora": 28, "pedregal": 27,
+    # Wind
+    "penonomé": 215, "penonome": 215, "toabré": 66, "toabre": 66,
+    # Solar
+    "antón solar": 10, "anton solar": 10,
+}
+
 DUMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dumps")
 
 
@@ -72,13 +97,10 @@ def _clean_lines(text: str) -> list[str]:
 
 
 def _parse_timestamp(lines: list[str]) -> Optional[str]:
-    """
-    Extract the CND timestamp from the page text.
-    Expected format: 02-marzo-2026 14:06:32
-    """
+    """Extract the CND timestamp. Format: 02-marzo-2026 14:06:32"""
     pattern = r"\d{2}-[A-Za-záéíóúñÁÉÍÓÚÑ]+-\d{4}\s+\d{2}:\d{2}:\d{2}"
     for line in lines:
-        match = re.match(pattern, line)
+        match = re.search(pattern, line)
         if match:
             return match.group(0)
     return None
@@ -87,46 +109,54 @@ def _parse_timestamp(lines: list[str]) -> Optional[str]:
 def _parse_numeric(text: str) -> Optional[float]:
     """Try to parse a numeric value, handling commas and whitespace."""
     text = text.strip().replace(",", ".")
+    # Remove any non-numeric chars except . and -
+    cleaned = re.sub(r"[^\d.\-]", "", text)
     try:
-        return float(text)
+        return float(cleaned) if cleaned else None
     except (ValueError, TypeError):
         return None
 
 
-def _extract_from_tables(soup, section_key: str, heading_texts: list[str]) -> dict:
-    """
-    Extract plant/value pairs from HTML tables that follow a section heading.
+def _lookup_capacity(name: str) -> int:
+    """Look up known capacity for a plant name."""
+    lower = name.lower().strip()
+    # Direct match
+    if lower in KNOWN_CAPACITIES:
+        return KNOWN_CAPACITIES[lower]
+    # Partial match
+    for key, cap in KNOWN_CAPACITIES.items():
+        if key in lower or lower in key:
+            return cap
+    return 0
 
-    Handles both:
-    - <table> with <tr><td>name</td><td>value</td></tr> rows
-    - Plain text lines "PlantName  value"
-    """
-    plants = {}
 
-    # Strategy 1: Find tables near section headings
-    for element in soup.find_all(string=re.compile("|".join(re.escape(h) for h in heading_texts))):
-        # Walk forward from the heading to find the next table
-        parent = element.find_parent()
-        sibling = parent.find_next_sibling() if parent else None
-        while sibling:
-            if sibling.name == "table":
-                for row in sibling.find_all("tr"):
-                    cells = row.find_all(["td", "th"])
-                    if len(cells) >= 2:
-                        name = cells[0].get_text(strip=True)
-                        val = _parse_numeric(cells[-1].get_text(strip=True))
-                        if name and val is not None and not any(
-                            name.startswith(t) for t in SECTION_TERMINATORS
-                        ):
-                            plants[name] = val
-                break
-            # Check if we hit another section heading
-            sib_text = sibling.get_text(strip=True)
-            if sib_text in SECTION_MAP:
-                break
-            sibling = sibling.find_next_sibling()
+def _classify_fuel(name: str) -> Optional[str]:
+    """Try to classify fuel type from plant name alone."""
+    lower = name.lower()
+    hydro_keywords = ["fortuna", "bayano", "chan", "estí", "esti", "caldera",
+                      "mina", "valles", "lirio", "estrella", "bonyic", "lorena",
+                      "pando", "gualaca", "barro", "algarrobos", "gatún", "gatun",
+                      "madden", "miraflores", "hidroel", "c.h."]
+    thermal_keywords = ["costa norte", "termo", "gena", "cobre", "blm", "bahía",
+                        "pan-am", "pacora", "pedregal", "diesel", "gas", "c.t.",
+                        "térmico", "termico"]
+    solar_keywords = ["solar", "fotovolt", "p.s."]
+    wind_keywords = ["eólico", "eolico", "penonomé", "penonome", "toabré",
+                     "toabre", "viento", "p.e."]
 
-    return plants
+    for kw in hydro_keywords:
+        if kw in lower:
+            return "hidro"
+    for kw in thermal_keywords:
+        if kw in lower:
+            return "termica"
+    for kw in solar_keywords:
+        if kw in lower:
+            return "solar"
+    for kw in wind_keywords:
+        if kw in lower:
+            return "eolica"
+    return None
 
 
 def is_reasonable_total(total_mw: float) -> bool:
@@ -143,8 +173,6 @@ def _dump_html(html: str, label: str):
         with open(path, "w", encoding="utf-8") as f:
             f.write(html)
         logger.info("Dumped raw HTML to %s (%d bytes)", path, len(html))
-
-        # Keep only the last 20 dumps to avoid disk bloat
         dumps = sorted(
             [os.path.join(DUMP_DIR, f) for f in os.listdir(DUMP_DIR)
              if f.startswith(label)],
@@ -159,22 +187,10 @@ def parse_generation_html(html: str) -> dict:
     """
     Parse the SITR gen.html page and extract generation data.
 
-    Uses two strategies:
-    1. Direct HTML table parsing (more reliable for structured tables)
-    2. Text-based line parsing (fallback for unstructured pages)
-
-    Returns:
-        {
-            "timestamp": "02-marzo-2026 14:06:32",
-            "source": "CND/SITR",
-            "hidro": {"Fortuna 1": 95.2, "Fortuna 2": 88.1, ...},
-            "termica": {"Costa Norte 1": 120.5, ...},
-            "solar": {"Solar Park A": 45.0, ...},
-            "eolica": {"Penonomé I": 33.2, ...},
-            "totals": {"hidro": 850.3, "termica": 620.1, "solar": 180.5, "eolica": 78.9},
-            "total_mw": 1729.8,
-            "parse_errors": []
-        }
+    Uses multiple strategies in order:
+    1. All <table> elements — extract name/value pairs from rows
+    2. Section-header-based text parsing
+    3. Global regex scan for "name  number" patterns
     """
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
@@ -190,30 +206,51 @@ def parse_generation_html(html: str) -> dict:
         "totals": {},
         "total_mw": 0.0,
         "parse_errors": [],
+        "_debug_line_count": len(lines),
+        "_debug_html_bytes": len(html),
     }
 
-    # Strategy 1: Parse HTML tables directly
-    section_headings = {
-        "hidro": ["Hidroeléctricas (MW)", "Hidroelectricas (MW)"],
-        "termica": ["Térmicas (MW)", "Termicas (MW)"],
-        "solar": ["Solares (MW)"],
-        "eolica": ["Eólicas (MW)", "Eolicas (MW)"],
-    }
+    # ── STRATEGY 1: Extract ALL table rows from ALL tables ──
+    all_table_pairs = []
+    for table in soup.find_all("table"):
+        for row in table.find_all("tr"):
+            cells = row.find_all(["td", "th"])
+            if len(cells) >= 2:
+                name = cells[0].get_text(strip=True)
+                val_text = cells[-1].get_text(strip=True)
+                val = _parse_numeric(val_text)
+                if name and val is not None and len(name) > 1:
+                    if not any(name.startswith(t) for t in SECTION_TERMINATORS):
+                        all_table_pairs.append((name, val))
 
-    for section, headings in section_headings.items():
-        table_data = _extract_from_tables(soup, section, headings)
-        if table_data:
-            data[section] = table_data
-
-    # Strategy 2: Text-based parsing (if tables didn't yield results)
+    # ── STRATEGY 2: Section-header-based text parsing ──
     current_section = None
+    text_pairs_by_section = {"hidro": {}, "termica": {}, "solar": {}, "eolica": {}}
+
     for line in lines:
-        # Check if this line is a section header
+        # Check for section header (exact or fuzzy)
         if line in SECTION_MAP:
             current_section = SECTION_MAP[line]
             continue
+        line_lower = line.lower()
+        if line_lower in SECTION_MAP_LOWER:
+            current_section = SECTION_MAP_LOWER[line_lower]
+            continue
+        # Fuzzy section detection
+        if "hidroel" in line_lower and "(mw)" in line_lower:
+            current_section = "hidro"
+            continue
+        if ("térmica" in line_lower or "termica" in line_lower) and "(mw)" in line_lower:
+            current_section = "termica"
+            continue
+        if "solar" in line_lower and "(mw)" in line_lower:
+            current_section = "solar"
+            continue
+        if ("eólica" in line_lower or "eolica" in line_lower) and "(mw)" in line_lower:
+            current_section = "eolica"
+            continue
 
-        # Check for section terminators (total rows)
+        # Check for section terminators
         if any(line.startswith(term) for term in SECTION_TERMINATORS):
             m = re.match(
                 r"^(?:Total|Subtotal|TOTAL|Total SIN)\s+(-?\d+(?:[.,]\d+)?)\s*$",
@@ -226,20 +263,55 @@ def parse_generation_html(html: str) -> dict:
             current_section = None
             continue
 
-        # If we're in a section AND that section is still empty (table parse missed it),
-        # try text-based extraction
-        if current_section and not data[current_section]:
-            # Pattern: plant name followed by spaces and a numeric value
+        # Extract name/value pairs from text lines
+        if current_section:
+            # Various patterns: "Name  123.4" or "Name 123,4" or tab-separated
             m = re.match(r"^(.+?)\s{2,}(-?\d+(?:[.,]\d+)?)\s*$", line)
+            if not m:
+                m = re.match(r"^(.+?)\t+(-?\d+(?:[.,]\d+)?)\s*$", line)
             if not m:
                 m = re.match(r"^(.*?)\s+(-?\d+(?:[.,]\d+)?)$", line)
             if m:
                 name = m.group(1).strip()
                 val = _parse_numeric(m.group(2))
-                if name and val is not None:
-                    data[current_section][name] = val
+                if name and val is not None and len(name) > 1:
+                    text_pairs_by_section[current_section][name] = val
 
-    # Compute totals if not provided by the page
+    # ── STRATEGY 3: Classify table pairs by fuel type ──
+    # First, use section-based text data
+    for section in ("hidro", "termica", "solar", "eolica"):
+        if text_pairs_by_section[section]:
+            data[section] = text_pairs_by_section[section]
+
+    # Then, enrich with table pairs (classify by name if no section)
+    for name, val in all_table_pairs:
+        # Skip if this is a known section header or metadata
+        if any(kw in name.lower() for kw in ["(mw)", "total", "subtotal", "sitr",
+                                               "cnd", "etesa", "seguimiento"]):
+            continue
+
+        # Check if already captured in a section
+        already_found = False
+        for section in ("hidro", "termica", "solar", "eolica"):
+            if name in data[section]:
+                already_found = True
+                break
+        if already_found:
+            continue
+
+        # Try to classify by plant name
+        fuel = _classify_fuel(name)
+        if fuel:
+            data[fuel][name] = val
+        else:
+            # If we can't classify, check if it looks like a plant name
+            # (not too short, not a date, not a header)
+            if len(name) >= 3 and val > 0 and not re.match(r"^\d", name):
+                # Default to termica if unknown
+                data["termica"][name] = val
+                data["parse_errors"].append(f"Unclassified plant: {name}={val}")
+
+    # ── Compute totals ──
     for section in ("hidro", "termica", "solar", "eolica"):
         if section not in data["totals"] and data[section]:
             data["totals"][section] = round(sum(data[section].values()), 2)
@@ -253,18 +325,7 @@ def parse_generation_html(html: str) -> dict:
 
 
 def parse_flow_html(html: str) -> dict:
-    """
-    Parse the SITR flow.html page for Flujo Occidente data.
-
-    Returns:
-        {
-            "timestamp": "...",
-            "flujo_occidente_mw": 123.4,
-            "limite_mw": 600.0,
-            "carga_pct": 20.6,
-            "parse_errors": [],
-        }
-    """
+    """Parse the SITR flow.html page for Flujo Occidente data."""
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
     lines = _clean_lines(text)
@@ -280,25 +341,21 @@ def parse_flow_html(html: str) -> dict:
 
     for line in lines:
         lower = line.lower()
-        # Look for "Flujo Occidente" value
         if "flujo" in lower and "occidente" in lower:
             m = re.search(r"(-?\d+(?:[.,]\d+)?)", line)
             if m:
                 data["flujo_occidente_mw"] = _parse_numeric(m.group(1))
-        # Look for "Limite" value
         if "limite" in lower or "límite" in lower:
             m = re.search(r"(-?\d+(?:[.,]\d+)?)", line)
             if m:
                 data["limite_mw"] = _parse_numeric(m.group(1))
 
-    # Also try table-based extraction
     for table in soup.find_all("table"):
         for row in table.find_all("tr"):
             cells = row.find_all(["td", "th"])
             if len(cells) >= 2:
                 label = cells[0].get_text(strip=True).lower()
-                val_text = cells[-1].get_text(strip=True)
-                val = _parse_numeric(val_text)
+                val = _parse_numeric(cells[-1].get_text(strip=True))
                 if val is not None:
                     if "flujo" in label:
                         data["flujo_occidente_mw"] = val
@@ -314,11 +371,7 @@ def parse_flow_html(html: str) -> dict:
 
 
 def summarize_generation(data: dict) -> dict:
-    """
-    Create a summary suitable for the dashboard API.
-
-    Returns a structure compatible with the existing frontend expectations.
-    """
+    """Create a summary suitable for the dashboard API."""
     generation_list = []
 
     fuel_type_map = {
@@ -330,12 +383,14 @@ def summarize_generation(data: dict) -> dict:
 
     for section, fuel_label in fuel_type_map.items():
         for name, output_mw in data.get(section, {}).items():
+            cap = _lookup_capacity(name)
+            util = round(output_mw / cap * 100, 1) if cap > 0 and output_mw > 0 else 0
             generation_list.append({
                 "name": name,
                 "fuel": fuel_label,
-                "capacity_mw": 0,  # CND page doesn't report capacity
+                "capacity_mw": cap,
                 "output_mw": round(output_mw, 1),
-                "utilization_pct": 0,
+                "utilization_pct": util,
             })
 
     return {
@@ -344,7 +399,7 @@ def summarize_generation(data: dict) -> dict:
         "generation": generation_list,
         "total_generation_mw": data.get("total_mw", 0),
         "totals_by_fuel": data.get("totals", {}),
-        "total_demand_mw": data.get("total_mw", 0),  # Approx: gen ≈ demand
+        "total_demand_mw": data.get("total_mw", 0),
         "siepac_flow_mw": 0,
         "siepac_direction": "N/A",
         "frequency_hz": 60.0,
@@ -354,16 +409,6 @@ def summarize_generation(data: dict) -> dict:
 class CNDCollector:
     """
     Background collector that periodically fetches generation data from CND.
-
-    Uses a persistent httpx.AsyncClient with retry logic and proper session
-    handling to maximize reliability against transient network issues.
-
-    Usage:
-        collector = CNDCollector(interval_seconds=60)
-        asyncio.create_task(collector.start())
-
-        # Later, from any endpoint:
-        data = collector.get_latest()
     """
 
     def __init__(self, interval_seconds: int = 60):
@@ -376,6 +421,7 @@ class CNDCollector:
         self._last_error: Optional[str] = None
         self._last_error_time: Optional[datetime] = None
         self._last_http_status: Optional[int] = None
+        self._last_html: Optional[str] = None
         self._running = False
         self._fetch_count = 0
         self._error_count = 0
@@ -384,7 +430,7 @@ class CNDCollector:
         self._client: Optional[httpx.AsyncClient] = None
 
     def _get_client(self) -> httpx.AsyncClient:
-        """Get or create a persistent HTTP client (session reuse)."""
+        """Get or create a persistent HTTP client."""
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(20.0, connect=10.0),
@@ -395,23 +441,20 @@ class CNDCollector:
         return self._client
 
     async def start(self):
-        """Start the periodic collection loop."""
         self._running = True
         logger.info(
-            "CND Collector started (interval=%ds, gen_url=%s, flow_url=%s)",
-            self.interval, GEN_URL, FLOW_URL,
+            "CND Collector started (interval=%ds, gen_url=%s)",
+            self.interval, GEN_URL,
         )
         while self._running:
             await self._fetch_once()
             await asyncio.sleep(self.interval)
 
     def stop(self):
-        """Stop the collection loop."""
         self._running = False
         logger.info("CND Collector stopped")
 
     async def close(self):
-        """Close the HTTP client."""
         if self._client and not self._client.is_closed:
             await self._client.aclose()
 
@@ -419,7 +462,6 @@ class CNDCollector:
         """Fetch a URL with exponential backoff retries."""
         client = self._get_client()
         last_exc = None
-
         for attempt in range(max_retries + 1):
             try:
                 response = await client.get(url)
@@ -431,13 +473,12 @@ class CNDCollector:
                 if isinstance(e, httpx.HTTPStatusError):
                     self._last_http_status = e.response.status_code
                 if attempt < max_retries:
-                    wait = 2 ** attempt  # 1s, 2s, 4s
+                    wait = 2 ** attempt
                     logger.warning(
                         "CND fetch attempt %d/%d failed for %s: %s — retrying in %ds",
                         attempt + 1, max_retries + 1, url, e, wait,
                     )
                     await asyncio.sleep(wait)
-                    # Recreate client on persistent errors
                     if isinstance(e, httpx.RequestError):
                         try:
                             await client.aclose()
@@ -445,7 +486,6 @@ class CNDCollector:
                             pass
                         self._client = None
                         client = self._get_client()
-
         raise last_exc
 
     async def _fetch_once(self):
@@ -454,23 +494,31 @@ class CNDCollector:
         try:
             response = await self._fetch_with_retries(GEN_URL)
             html = response.text
+            self._last_html = html
 
             raw = parse_generation_html(html)
+            plant_count = sum(
+                len(raw[s]) for s in ("hidro", "termica", "solar", "eolica")
+            )
 
-            # Physical validation: reject anomalous data
+            # Physical validation
             if not is_reasonable_total(raw["total_mw"]):
                 self._validation_failures += 1
                 self._last_error = (
                     f"VALIDATION: total_mw={raw['total_mw']:.1f} outside "
-                    f"[{MIN_REASONABLE_MW}, {MAX_REASONABLE_MW}] range"
+                    f"[{MIN_REASONABLE_MW}, {MAX_REASONABLE_MW}] range "
+                    f"(found {plant_count} plants, {len(html)} bytes HTML)"
                 )
                 self._last_error_time = datetime.now()
-                logger.warning(
-                    "CND data rejected: %s (plant_count=%d)",
-                    self._last_error,
-                    sum(len(raw[s]) for s in ("hidro", "termica", "solar", "eolica")),
-                )
+                logger.warning("CND data rejected: %s", self._last_error)
                 _dump_html(html, "validation_fail")
+
+                # STILL store the raw parse result (marked as invalid)
+                # so the debug endpoint can show what was parsed
+                raw["_validation_failed"] = True
+                self._latest_raw = raw
+                self._latest_summary = summarize_generation(raw)
+                self._latest_summary["_validation_failed"] = True
                 return
 
             summary = summarize_generation(raw)
@@ -485,9 +533,6 @@ class CNDCollector:
             self._fetch_count += 1
             self._consecutive_errors = 0
 
-            plant_count = sum(
-                len(raw[s]) for s in ("hidro", "termica", "solar", "eolica")
-            )
             logger.info(
                 "CND fetch #%d OK: %d plants, %.1f MW total, ts=%s",
                 self._fetch_count, plant_count,
@@ -519,32 +564,51 @@ class CNDCollector:
             if html:
                 _dump_html(html, "parse_error")
 
-        # Also fetch flow data (best-effort, don't block on failure)
+        # Also fetch flow data (best-effort)
         await self._fetch_flow()
 
     async def _fetch_flow(self):
-        """Fetch Flujo Occidente data from flow.html (best-effort)."""
         try:
             response = await self._fetch_with_retries(FLOW_URL, max_retries=1)
-            flow_data = parse_flow_html(response.text)
-            self._latest_flow = flow_data
+            self._latest_flow = parse_flow_html(response.text)
         except Exception as e:
             logger.debug("Flow fetch failed (non-critical): %s", e)
 
     def get_latest_raw(self) -> Optional[dict]:
-        """Get the latest raw parsed data (all sections with plant detail)."""
-        return self._latest_raw
+        raw = self._latest_raw
+        if raw and raw.get("_validation_failed"):
+            return None  # Don't serve invalid data as "live"
+        return raw
 
     def get_latest(self) -> Optional[dict]:
-        """Get the latest summarized generation data for the API."""
-        return self._latest_summary
+        summary = self._latest_summary
+        if summary and summary.get("_validation_failed"):
+            return None
+        return summary
 
     def get_latest_flow(self) -> Optional[dict]:
-        """Get the latest Flujo Occidente data."""
         return self._latest_flow
 
+    def get_debug_info(self) -> dict:
+        """Full diagnostic info: raw HTML, parse results, everything."""
+        raw = self._latest_raw or {}
+        return {
+            "status": self.get_status(),
+            "last_html_bytes": len(self._last_html) if self._last_html else 0,
+            "last_html_preview": self._last_html[:5000] if self._last_html else None,
+            "last_html_text_lines": _clean_lines(
+                BeautifulSoup(self._last_html, "html.parser").get_text("\n", strip=True)
+            )[:100] if self._last_html else [],
+            "parse_result": raw,
+            "plant_counts": {
+                s: len(raw.get(s, {}))
+                for s in ("hidro", "termica", "solar", "eolica")
+            },
+            "total_mw": raw.get("total_mw", 0),
+            "validation_passed": not raw.get("_validation_failed", False),
+        }
+
     def get_status(self) -> dict:
-        """Get collector health status with full observability."""
         return {
             "running": self._running,
             "last_fetch": self._last_fetch.isoformat() if self._last_fetch else None,
@@ -556,7 +620,7 @@ class CNDCollector:
             "error_count": self._error_count,
             "consecutive_errors": self._consecutive_errors,
             "validation_failures": self._validation_failures,
-            "has_data": self._latest_raw is not None,
+            "has_data": self.get_latest_raw() is not None,
             "has_flow_data": self._latest_flow is not None,
             "source_url": GEN_URL,
             "flow_url": FLOW_URL,
@@ -569,7 +633,6 @@ _collector: Optional[CNDCollector] = None
 
 
 def get_collector() -> CNDCollector:
-    """Get or create the singleton collector instance."""
     global _collector
     if _collector is None:
         _collector = CNDCollector(interval_seconds=60)
