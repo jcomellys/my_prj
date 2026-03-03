@@ -34,8 +34,35 @@ from ..engine.market import (
     run_full_market_analysis,
 )
 from ..data.scraper import get_simulator
+from ..data.cnd_collector import get_collector
+from ..data.cache import get_cache
 
 router = APIRouter()
+
+
+def _get_realtime_generation():
+    """
+    Get generation data: prefer real CND data, fallback to simulator.
+    Returns (data_dict, source_label).
+    """
+    collector = get_collector()
+    live = collector.get_latest()
+    if live is not None:
+        live["data_source"] = "live"
+        return live
+
+    # Fallback: try SQLite cache
+    cache = get_cache()
+    cached = cache.get_latest()
+    if cached is not None:
+        cached["data_source"] = "cache"
+        return cached
+
+    # Final fallback: simulator
+    sim = get_simulator()
+    data = sim.get_generation_data()
+    data["data_source"] = "simulator"
+    return data
 
 
 # ============================================================
@@ -269,9 +296,9 @@ async def get_realtime_conditions():
 
 @router.get("/api/realtime/generation")
 async def get_realtime_generation():
-    """Get simulated real-time generation data."""
-    sim = get_simulator()
-    return JSONResponse(content=sim.get_generation_data())
+    """Get real-time generation data (CND live > cache > simulator)."""
+    data = _get_realtime_generation()
+    return JSONResponse(content=data)
 
 
 @router.get("/api/realtime/market")
@@ -290,9 +317,80 @@ async def get_realtime_voltages():
 
 @router.get("/api/realtime/history")
 async def get_load_history(hours: int = Query(24, ge=1, le=168)):
-    """Get historical load data."""
+    """Get historical load data (from cache if available, else simulator)."""
+    cache = get_cache()
+    history = cache.get_history(hours)
+    if history:
+        return JSONResponse(content={
+            "source": "cache",
+            "data": history,
+        })
     sim = get_simulator()
-    return JSONResponse(content=sim.get_historical_load(hours))
+    return JSONResponse(content={
+        "source": "simulator",
+        "data": sim.get_historical_load(hours),
+    })
+
+
+# ============================================================
+# CND DATA ENDPOINTS
+# ============================================================
+
+@router.get("/api/cnd/generation")
+async def get_cnd_generation():
+    """Get the latest CND generation data (detailed by plant)."""
+    collector = get_collector()
+    raw = collector.get_latest_raw()
+    if raw:
+        return JSONResponse(content={
+            "source": "CND/SITR (sitr.cnd.com.pa)",
+            "data": raw,
+        })
+    return JSONResponse(
+        status_code=503,
+        content={"error": "No CND data available yet", "hint": "Collector may still be starting"},
+    )
+
+
+@router.get("/api/cnd/generation/fortuna")
+async def get_cnd_fortuna():
+    """Get Fortuna hydroelectric units detail."""
+    collector = get_collector()
+    raw = collector.get_latest_raw()
+    if raw and raw.get("hidro"):
+        fortuna = {k: v for k, v in raw["hidro"].items() if "fortuna" in k.lower()}
+        return JSONResponse(content={
+            "source": "CND/SITR",
+            "timestamp": raw.get("timestamp"),
+            "fortuna_units": fortuna,
+            "total_fortuna_mw": round(sum(fortuna.values()), 1),
+        })
+    return JSONResponse(
+        status_code=503,
+        content={"error": "No CND data available"},
+    )
+
+
+@router.get("/api/cnd/history")
+async def get_cnd_history(hours: int = Query(24, ge=1, le=168)):
+    """Get historical generation from the SQLite cache."""
+    cache = get_cache()
+    history = cache.get_history(hours)
+    return JSONResponse(content={
+        "source": "cache",
+        "snapshots": len(history),
+        "data": history,
+    })
+
+
+@router.get("/api/cnd/status")
+async def get_cnd_status():
+    """Get the CND collector health status."""
+    collector = get_collector()
+    cache = get_cache()
+    status = collector.get_status()
+    status["cache_snapshots"] = cache.get_snapshot_count()
+    return JSONResponse(content=status)
 
 
 # ============================================================
@@ -329,15 +427,23 @@ async def websocket_realtime(websocket: WebSocket):
 
     try:
         while True:
-            # Send comprehensive update every 5 seconds
+            # Use real CND data for generation if available
+            generation = _get_realtime_generation()
+
+            # These still come from the simulator (market, voltages, conditions)
             conditions = sim.get_current_conditions()
-            generation = sim.get_generation_data()
             market = sim.get_market_data()
             voltages = sim.get_bus_voltages()
+
+            # If CND data is live, override demand with real total
+            if generation.get("data_source") == "live":
+                conditions["current_demand_mw"] = generation.get("total_demand_mw", conditions["current_demand_mw"])
 
             update = {
                 "type": "realtime_update",
                 "timestamp": datetime.now().isoformat(),
+                "data_source": generation.get("data_source", "simulator"),
+                "cnd_timestamp": generation.get("timestamp"),
                 "conditions": conditions,
                 "generation": generation,
                 "market": market,

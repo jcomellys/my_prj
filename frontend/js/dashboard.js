@@ -206,6 +206,7 @@ function connectWebSocket() {
             updateKPIs(data);
             updateGenerationTable(data.generation);
             updateAlertsFromRT(data);
+            updateDataSourceIndicator(data);
         }
     };
 
@@ -235,6 +236,35 @@ function updateKPIs(data) {
     if (data.market) {
         document.getElementById('kpi-marginal-cost').textContent = data.market.spot_price_usd_mwh.toFixed(1);
     }
+}
+
+// ============================================================
+// DATA SOURCE INDICATOR
+// ============================================================
+function updateDataSourceIndicator(data) {
+    const dot = document.getElementById('data-source-dot');
+    const text = document.getElementById('data-source-text');
+    const footerTs = document.getElementById('footer-cnd-timestamp');
+    const footerSrc = document.getElementById('footer-data-source');
+
+    const source = data.data_source || 'simulator';
+    const cndTs = data.cnd_timestamp || '--';
+
+    const sourceLabels = {
+        'live': 'CND en vivo',
+        'cache': 'Cache (CND)',
+        'simulator': 'Simulador',
+    };
+    const sourceColors = {
+        'live': '#10b981',
+        'cache': '#f59e0b',
+        'simulator': '#6b7280',
+    };
+
+    if (dot) dot.style.background = sourceColors[source] || '#6b7280';
+    if (text) text.textContent = 'Fuente: ' + (sourceLabels[source] || source);
+    if (footerTs) footerTs.textContent = cndTs;
+    if (footerSrc) footerSrc.textContent = sourceLabels[source] || source;
 }
 
 // ============================================================

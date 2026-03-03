@@ -36,6 +36,10 @@
             <span class="status-dot" id="ws-status"></span>
             <span id="ws-status-text">Conectando...</span>
         </div>
+        <div class="status-indicator" style="margin-left:12px;">
+            <span class="status-dot" id="data-source-dot" style="background:#6b7280;"></span>
+            <span id="data-source-text" style="font-size:0.7rem;">Fuente: --</span>
+        </div>
         <div class="clock" id="clock">--:--:--</div>
     </div>
 </header>
@@ -524,6 +528,20 @@
     </div>
 
 </div>
+
+<!-- Source Attribution -->
+<footer style="text-align:center;padding:12px;color:#64748b;font-size:0.7rem;border-top:1px solid #1e293b;">
+    Datos de generacion: <a href="https://sitr.cnd.com.pa/m/pub/gen.html" target="_blank" style="color:#3b82f6;">ETESA/CND (sitr.cnd.com.pa)</a>
+    &bull; Ultima lectura CND: <span id="cnd-timestamp">--</span>
+    &bull; La informacion puede ser actualizada para corregir errores o imprecisiones
+</footer>
+
+<!-- Source Attribution Footer -->
+<footer style="padding:8px 24px;text-align:center;font-size:0.7rem;color:#64748b;border-top:1px solid rgba(45,55,72,0.5);">
+    Datos de generacion: <a href="https://sitr.cnd.com.pa/m/pub/gen.html" target="_blank" style="color:#3b82f6;">ETESA/CND - SITR</a>
+    &nbsp;|&nbsp; Ultima lectura CND: <span id="footer-cnd-timestamp">--</span>
+    &nbsp;|&nbsp; Fuente de datos: <span id="footer-data-source">--</span>
+</footer>
 
 <!-- Dashboard JavaScript -->
 <script src="/js/dashboard.js"></script>
