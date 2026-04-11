@@ -197,6 +197,7 @@ def get_generation_data():
             "fortuna_2": 0.0,
             "fortuna_3": 0.0,
         }
+        bayano = {"bayano": 0.0}
 
         # Palabras clave para clasificar por tipo
         HIDRO_KEYS = [
@@ -240,6 +241,10 @@ def get_generation_data():
                     elif any(x in name_lower for x in ["3", " iii", "iii\n"]) or name_lower.endswith("iii") or name_lower.endswith("3"):
                         fortuna["fortuna_3"] = value
 
+                # Clasificar Bayano
+                if "bayano" in name_lower:
+                    bayano["bayano"] += value
+
                 # Clasificar por fuente
                 if any(w in name_lower for w in HIDRO_KEYS):
                     by_source["hidrica"] += value
@@ -254,6 +259,7 @@ def get_generation_data():
             "plants": plants,
             "by_source": by_source,
             "fortuna": fortuna,
+            "bayano": bayano,
         }
     except Exception as e:
         print(f"Error obteniendo datos de generacion: {e}")
@@ -291,11 +297,103 @@ def get_interconnection_data():
         return None
 
 
+def get_embalse_data():
+    """Obtiene niveles de embalses (Fortuna, Bayano)."""
+    embalses = {
+        "fortuna": {"nivel": 0.0, "pct": 0.0},
+        "bayano": {"nivel": 0.0, "pct": 0.0},
+    }
+
+    # Fortuna: max operativo ~1055 msnm, min ~1010 msnm
+    FORTUNA_MAX = 1055.0
+    FORTUNA_MIN = 1010.0
+    # Bayano: max operativo ~62 msnm, min ~50 msnm
+    BAYANO_MAX = 62.0
+    BAYANO_MIN = 50.0
+
+    # Intentar desde SITR (vert.html o sin.html)
+    for path in ["/m/pub/vert.html", "/m/pub/sin.html"]:
+        try:
+            soup = fetch_page(path)
+
+            # Buscar en JavaScript
+            for script in soup.find_all("script"):
+                text = script.string or ""
+                for pattern in [r"fortuna.*?(\d{4}\.?\d*)", r"nivel.*?fortuna.*?(\d{4}\.?\d*)"]:
+                    match = re.search(pattern, text, re.IGNORECASE)
+                    if match:
+                        val = float(match.group(1))
+                        if 1000 < val < 1100:
+                            embalses["fortuna"]["nivel"] = val
+                for pattern in [r"bayano.*?(\d{2}\.?\d*)", r"nivel.*?bayano.*?(\d{2}\.?\d*)"]:
+                    match = re.search(pattern, text, re.IGNORECASE)
+                    if match:
+                        val = float(match.group(1))
+                        if 40 < val < 70:
+                            embalses["bayano"]["nivel"] = val
+
+            # Buscar en tablas y elementos
+            for el in soup.find_all(["td", "span", "div", "p", "b", "label"]):
+                el_text = el.get_text(strip=True).lower()
+                el_id = (el.get("id") or "").lower()
+                combined = el_text + " " + el_id
+
+                if "fortuna" in combined and ("embalse" in combined or "nivel" in combined or "%" in el_text):
+                    val = parse_number(el.get_text())
+                    if 1000 < val < 1100:
+                        embalses["fortuna"]["nivel"] = val
+                    elif 0 < val <= 100:
+                        embalses["fortuna"]["pct"] = val
+
+                if "bayano" in combined and ("embalse" in combined or "nivel" in combined or "%" in el_text):
+                    val = parse_number(el.get_text())
+                    if 40 < val < 70:
+                        embalses["bayano"]["nivel"] = val
+                    elif 0 < val <= 100:
+                        embalses["bayano"]["pct"] = val
+        except Exception:
+            continue
+
+    # Intentar desde hidromet.com.pa como respaldo
+    try:
+        resp = SESSION.get("https://www.hidromet.com.pa/es/centrales-hidroelectricas", timeout=10)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, "html.parser")
+            text = soup.get_text(" ", strip=True)
+
+            # Buscar niveles
+            fort_match = re.search(r"fortuna.*?(\d{4}\.?\d*)\s*msnm", text, re.IGNORECASE)
+            if fort_match:
+                embalses["fortuna"]["nivel"] = float(fort_match.group(1))
+
+            bay_match = re.search(r"bayano.*?(\d{2}\.?\d*)\s*msnm", text, re.IGNORECASE)
+            if bay_match:
+                embalses["bayano"]["nivel"] = float(bay_match.group(1))
+    except Exception:
+        pass
+
+    # Calcular porcentaje si tenemos nivel pero no porcentaje
+    if embalses["fortuna"]["nivel"] > 0 and embalses["fortuna"]["pct"] == 0:
+        nivel = embalses["fortuna"]["nivel"]
+        embalses["fortuna"]["pct"] = round(
+            (nivel - FORTUNA_MIN) / (FORTUNA_MAX - FORTUNA_MIN) * 100, 1
+        )
+
+    if embalses["bayano"]["nivel"] > 0 and embalses["bayano"]["pct"] == 0:
+        nivel = embalses["bayano"]["nivel"]
+        embalses["bayano"]["pct"] = round(
+            (nivel - BAYANO_MIN) / (BAYANO_MAX - BAYANO_MIN) * 100, 1
+        )
+
+    return embalses
+
+
 def get_all_data():
     """Obtiene todos los datos del SITR."""
     sin = get_sin_data()
     gen = get_generation_data()
     inter = get_interconnection_data()
+    embalses = get_embalse_data()
 
     # Si no tenemos generacion total del SIN, calcularla desde las fuentes
     if sin and gen:
@@ -313,6 +411,7 @@ def get_all_data():
         "sin": sin,
         "generation": gen,
         "interconnection": inter,
+        "embalses": embalses,
     }
 
 

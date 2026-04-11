@@ -14,6 +14,7 @@ def format_taz_report(data):
     sin = data.get("sin") or {}
     gen = data.get("generation") or {}
     inter = data.get("interconnection") or {}
+    embalses = data.get("embalses") or {}
 
     generacion = sin.get("generacion", 0)
     demanda = sin.get("demanda", 0)
@@ -37,6 +38,14 @@ def format_taz_report(data):
     f2 = fortuna.get("fortuna_2", 0)
     f3 = fortuna.get("fortuna_3", 0)
     f_total = f1 + f2 + f3
+
+    bayano_data = gen.get("bayano", {})
+    bayano_mw = bayano_data.get("bayano", 0)
+
+    emb_fortuna = embalses.get("fortuna", {})
+    emb_bayano = embalses.get("bayano", {})
+    emb_fortuna_pct = emb_fortuna.get("pct", 0)
+    emb_bayano_pct = emb_bayano.get("pct", 0)
 
     inter_mw = inter.get("interconexion_mw", 0)
     inter_tipo = inter.get("tipo", "N/D")
@@ -65,6 +74,20 @@ def format_taz_report(data):
         f"  Fortuna 3: {f3:.2f} MW",
     ]
 
+    # Embalse Fortuna
+    if emb_fortuna_pct > 0:
+        lines.append(f"  Embalse: {emb_fortuna_pct:.0f}%")
+    elif emb_fortuna.get("nivel", 0) > 0:
+        lines.append(f"  Embalse: {emb_fortuna['nivel']:.1f} msnm")
+
+    # Bayano
+    lines.append("")
+    lines.append(f"Bayano: {bayano_mw:.2f} MW")
+    if emb_bayano_pct > 0:
+        lines.append(f"  Embalse: {emb_bayano_pct:.0f}%")
+    elif emb_bayano.get("nivel", 0) > 0:
+        lines.append(f"  Embalse: {emb_bayano['nivel']:.1f} msnm")
+
     if inter_mw > 0:
         lines.append("")
         lines.append(f"Interconexion: {inter_tipo} *{inter_mw:.2f}* MW")
@@ -82,6 +105,8 @@ def format_taz_report(data):
         plantas_offline.append("Fortuna 2")
     if f3 == 0:
         plantas_offline.append("Fortuna 3")
+    if bayano_mw == 0:
+        plantas_offline.append("Bayano")
     if plantas_offline:
         alertas.append(f"Sin generacion: {', '.join(plantas_offline)}")
 
