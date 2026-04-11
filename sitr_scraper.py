@@ -202,6 +202,16 @@ def get_generation_data():
             "bayano_2": 0.0,
             "bayano_3": 0.0,
         }
+        changuinola = {
+            "changuinola_1": 0.0,
+            "changuinola_2": 0.0,
+            "changuinola_3": 0.0,
+        }
+        termicas = {
+            "gatun": 0.0,
+            "cobre": 0.0,
+            "costa_norte": 0.0,
+        }
 
         # Palabras clave para clasificar por tipo
         HIDRO_KEYS = [
@@ -214,6 +224,7 @@ def get_generation_data():
         TERM_KEYS = [
             "term", "gas", "diesel", "bunker", "carbon", "gnl", "lng",
             "bahia", "cobre", "pacora", "jinro", "thermal",
+            "gatun", "gat\u00fan", "costa norte",
         ]
         SOLAR_KEYS = ["solar", "foto", "pv", "photovoltaic"]
         EOLICA_KEYS = ["eol", "viento", "wind", "penonomé", "penonome"]
@@ -256,6 +267,23 @@ def get_generation_data():
                     elif "3" in name_lower:
                         bayano["bayano_3"] = value
 
+                # Clasificar Changuinola
+                if "changuinola" in name_lower:
+                    if "1" in name_lower:
+                        changuinola["changuinola_1"] = value
+                    elif "2" in name_lower:
+                        changuinola["changuinola_2"] = value
+                    elif "3" in name_lower:
+                        changuinola["changuinola_3"] = value
+
+                # Clasificar termicas grandes
+                if "gatun" in name_lower or "gatún" in name_lower:
+                    termicas["gatun"] += value
+                elif "cobre" in name_lower:
+                    termicas["cobre"] += value
+                elif "costa norte" in name_lower:
+                    termicas["costa_norte"] += value
+
                 # Clasificar por fuente
                 if any(w in name_lower for w in HIDRO_KEYS):
                     by_source["hidrica"] += value
@@ -271,6 +299,8 @@ def get_generation_data():
             "by_source": by_source,
             "fortuna": fortuna,
             "bayano": bayano,
+            "changuinola": changuinola,
+            "termicas": termicas,
         }
     except Exception as e:
         print(f"Error obteniendo datos de generacion: {e}")

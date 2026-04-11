@@ -72,6 +72,17 @@ def format_taz_report(data, prev):
     b3 = bayano_data.get("bayano_3", 0)
     bayano_total = b1 + b2 + b3
 
+    chang_data = gen.get("changuinola", {})
+    ch1 = chang_data.get("changuinola_1", 0)
+    ch2 = chang_data.get("changuinola_2", 0)
+    ch3 = chang_data.get("changuinola_3", 0)
+    chang_total = ch1 + ch2 + ch3
+
+    term_data = gen.get("termicas", {})
+    gatun = term_data.get("gatun", 0)
+    cobre = term_data.get("cobre", 0)
+    costa_norte = term_data.get("costa_norte", 0)
+
     emb_fortuna = embalses.get("fortuna", {})
     emb_bayano = embalses.get("bayano", {})
     emb_fortuna_pct = emb_fortuna.get("pct", 0)
@@ -119,6 +130,20 @@ def format_taz_report(data, prev):
     elif emb_bayano.get("nivel", 0) > 0:
         lines.append(f"  \U0001f4c8 Embalse: {emb_bayano['nivel']:.1f} msnm")
 
+    # Changuinola
+    lines.append("")
+    lines.append(f"\U0001f4a7 Changuinola (Total: {chang_total:.2f} MW):")
+    lines.append(f"  \U0001f539 Changuinola 1: {ch1:.2f} MW")
+    lines.append(f"  \U0001f539 Changuinola 2: {ch2:.2f} MW")
+    lines.append(f"  \U0001f539 Changuinola 3: {ch3:.2f} MW")
+
+    # Termicas grandes
+    lines.append("")
+    lines.append("\U0001f525 T\u00e9rmicas Principales:")
+    lines.append(f"  \U0001f534 Gat\u00fan: {gatun:.2f} MW")
+    lines.append(f"  \U0001f534 Cobre Panam\u00e1: {cobre:.2f} MW")
+    lines.append(f"  \U0001f534 Costa Norte: {costa_norte:.2f} MW")
+
     if inter_mw > 0:
         lines.append("")
         lines.append(f"\U0001f517 Interconexi\u00f3n: {inter_tipo} *{inter_mw:.2f}* MW")
@@ -144,6 +169,18 @@ def format_taz_report(data, prev):
         plantas_offline.append("Bayano 2")
     if b3 == 0:
         plantas_offline.append("Bayano 3")
+    if ch1 == 0:
+        plantas_offline.append("Changuinola 1")
+    if ch2 == 0:
+        plantas_offline.append("Changuinola 2")
+    if ch3 == 0:
+        plantas_offline.append("Changuinola 3")
+    if gatun == 0:
+        plantas_offline.append("Gat\u00fan")
+    if cobre == 0:
+        plantas_offline.append("Cobre")
+    if costa_norte == 0:
+        plantas_offline.append("Costa Norte")
     if plantas_offline:
         alertas.append(f"Plantas importantes sin generaci\u00f3n: {', '.join(plantas_offline)}")
 
