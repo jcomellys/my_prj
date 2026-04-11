@@ -1,15 +1,42 @@
 """Taz - Monitor del SIN Panama con reporte por WhatsApp."""
 
 import datetime
+import json
+import os
 import schedule
 import time
 from whatsapp_sender import send_whatsapp_message
 from sitr_scraper import get_all_data
 
+PREV_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".taz_prev.json")
 
-def format_taz_report(data):
-    """Formatea el reporte al estilo Taz."""
+
+def load_previous():
+    """Carga datos del reporte anterior."""
+    try:
+        with open(PREV_DATA_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def save_current(data):
+    """Guarda datos actuales para comparacion futura."""
+    try:
+        to_save = {
+            "generacion": data.get("sin", {}).get("generacion", 0),
+            "demanda": data.get("sin", {}).get("demanda", 0),
+        }
+        with open(PREV_DATA_FILE, "w") as f:
+            json.dump(to_save, f)
+    except Exception:
+        pass
+
+
+def format_taz_report(data, prev):
+    """Formatea el reporte al estilo Taz con emojis."""
     now = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    now_short = datetime.datetime.now().strftime("%H:%M")
 
     sin = data.get("sin") or {}
     gen = data.get("generation") or {}
@@ -54,52 +81,52 @@ def format_taz_report(data):
     inter_tipo = inter.get("tipo", "N/D")
 
     balance_sign = "+" if balance >= 0 else ""
-
     freq_str = f"*{frecuencia:.2f}* Hz" if frecuencia > 0 else "N/D"
 
     lines = [
-        f"REPORTE SIN - {now}",
-        "=" * 30,
-        f"Generacion: *{generacion:.2f}* MW",
-        f"Demanda: *{demanda:.2f}* MW",
-        f"Balance: *{balance_sign}{balance:.2f}* MW",
-        f"Frecuencia: {freq_str}",
+        f"\U0001f4ca REPORTE SIN \u2014 {now}",
+        "\u2501" * 23,
+        f"\U0001f50b Generaci\u00f3n: *{generacion:.2f}* MW",
+        f"\U0001f4ca Demanda: *{demanda:.2f}* MW",
+        f"\u2696\ufe0f Balance: *{balance_sign}{balance:.2f}* MW",
+        f"\U0001f504 Frecuencia: {freq_str}",
         "",
-        "Por Fuente:",
-        f"  Hidrica: {hidrica:.2f} MW ({pct(hidrica)})",
-        f"  Termica: {termica:.2f} MW ({pct(termica)})",
-        f"  Solar: {solar:.2f} MW ({pct(solar)})",
-        f"  Eolica: {eolica:.2f} MW ({pct(eolica)})",
+        "\U0001f3ed Por Fuente:",
+        f"  \U0001f4a7 H\u00eddrica: {hidrica:.2f} MW ({pct(hidrica)})",
+        f"  \U0001f525 T\u00e9rmica: {termica:.2f} MW ({pct(termica)})",
+        f"  \u2600\ufe0f Solar: {solar:.2f} MW ({pct(solar)})",
+        f"  \U0001f32c\ufe0f E\u00f3lica: {eolica:.2f} MW ({pct(eolica)})",
         "",
-        f"Fortuna (Total: {f_total:.2f} MW):",
-        f"  Fortuna 1: {f1:.2f} MW",
-        f"  Fortuna 2: {f2:.2f} MW",
-        f"  Fortuna 3: {f3:.2f} MW",
+        f"\U0001f4a1 Fortuna (Total: {f_total:.2f} MW):",
+        f"  \U0001f539 Fortuna 1: {f1:.2f} MW",
+        f"  \U0001f539 Fortuna 2: {f2:.2f} MW",
+        f"  \U0001f539 Fortuna 3: {f3:.2f} MW",
     ]
 
-    # Embalse Fortuna
     if emb_fortuna_pct > 0:
-        lines.append(f"  Embalse: {emb_fortuna_pct:.0f}%")
+        lines.append(f"  \U0001f4c8 Embalse: {emb_fortuna_pct:.0f}%")
     elif emb_fortuna.get("nivel", 0) > 0:
-        lines.append(f"  Embalse: {emb_fortuna['nivel']:.1f} msnm")
+        lines.append(f"  \U0001f4c8 Embalse: {emb_fortuna['nivel']:.1f} msnm")
 
-    # Bayano
     lines.append("")
-    lines.append(f"Bayano (Total: {bayano_total:.2f} MW):")
-    lines.append(f"  Bayano 1: {b1:.2f} MW")
-    lines.append(f"  Bayano 2: {b2:.2f} MW")
-    lines.append(f"  Bayano 3: {b3:.2f} MW")
+    lines.append(f"\U0001f4a1 Bayano (Total: {bayano_total:.2f} MW):")
+    lines.append(f"  \U0001f539 Bayano 1: {b1:.2f} MW")
+    lines.append(f"  \U0001f539 Bayano 2: {b2:.2f} MW")
+    lines.append(f"  \U0001f539 Bayano 3: {b3:.2f} MW")
+
     if emb_bayano_pct > 0:
-        lines.append(f"  Embalse: {emb_bayano_pct:.0f}%")
+        lines.append(f"  \U0001f4c8 Embalse: {emb_bayano_pct:.0f}%")
     elif emb_bayano.get("nivel", 0) > 0:
-        lines.append(f"  Embalse: {emb_bayano['nivel']:.1f} msnm")
+        lines.append(f"  \U0001f4c8 Embalse: {emb_bayano['nivel']:.1f} msnm")
 
     if inter_mw > 0:
         lines.append("")
-        lines.append(f"Interconexion: {inter_tipo} *{inter_mw:.2f}* MW")
+        lines.append(f"\U0001f517 Interconexi\u00f3n: {inter_tipo} *{inter_mw:.2f}* MW")
 
     # Alertas
     alertas = []
+    info = []
+
     if generacion > 0 and balance < 200:
         reserva_pct = (balance / generacion * 100) if generacion > 0 else 0
         alertas.append(f"Reserva operativa baja: {reserva_pct:.0f}% ({balance:.0f} MW)")
@@ -118,19 +145,36 @@ def format_taz_report(data):
     if b3 == 0:
         plantas_offline.append("Bayano 3")
     if plantas_offline:
-        alertas.append(f"Sin generacion: {', '.join(plantas_offline)}")
+        alertas.append(f"Plantas importantes sin generaci\u00f3n: {', '.join(plantas_offline)}")
 
     if frecuencia > 0 and (frecuencia < 59.95 or frecuencia > 60.05):
         alertas.append(f"Frecuencia fuera de rango: {frecuencia:.2f} Hz")
 
-    if alertas:
+    # Comparacion con reporte anterior
+    if prev:
+        prev_gen = prev.get("generacion", 0)
+        prev_dem = prev.get("demanda", 0)
+        if prev_gen > 0 and generacion > 0:
+            diff_gen = generacion - prev_gen
+            if abs(diff_gen) > 10:
+                direction = "subi\u00f3" if diff_gen > 0 else "baj\u00f3"
+                info.append(f"Generaci\u00f3n {direction} {abs(diff_gen):.0f} MW")
+        if prev_dem > 0 and demanda > 0:
+            diff_dem = demanda - prev_dem
+            if abs(diff_dem) > 10:
+                direction = "subi\u00f3" if diff_dem > 0 else "baj\u00f3"
+                info.append(f"Demanda {direction} {abs(diff_dem):.0f} MW")
+
+    if alertas or info:
         lines.append("")
-        lines.append("ALERTAS:")
+        lines.append(f"\U0001f514 *ALERTA SIN \u2014 {now_short}*")
         for a in alertas:
-            lines.append(f"  * {a}")
+            lines.append(f"\u26a0\ufe0f {a}")
+        for i in info:
+            lines.append(f"\u2139\ufe0f {i}")
 
     lines.append("")
-    lines.append("Taz - Monitoreo Continuo")
+    lines.append("\U0001f9ec Taz \u2014 Monitoreo Continuo")
 
     return "\n".join(lines)
 
@@ -144,28 +188,30 @@ def send_taz_report():
         data = get_all_data()
     except Exception as e:
         print(f"Error: {e}")
-        send_whatsapp_message(f"ALERTA Taz {now}: Error obteniendo datos - {e}")
+        send_whatsapp_message(f"\u26a0\ufe0f ALERTA Taz {now}: Error obteniendo datos - {e}")
         return
 
     gen = data.get("generation")
     if not gen or sum(gen.get("by_source", {}).values()) == 0:
         print("No se pudieron obtener datos del SITR.")
         send_whatsapp_message(
-            f"ALERTA Taz {now}: No se pudieron obtener datos del SITR. "
+            f"\u26a0\ufe0f ALERTA Taz {now}: No se pudieron obtener datos del SITR. "
             "Verificar conexion con sitr.cnd.com.pa"
         )
         return
 
-    report = format_taz_report(data)
+    prev = load_previous()
+    report = format_taz_report(data, prev)
     print(report)
     print("-" * 30)
     send_whatsapp_message(report)
+    save_current(data)
     print(f"[{now}] Reporte Taz enviado.")
 
 
 def start_monitoring(interval_minutes=60):
     """Inicia el monitoreo cada hora."""
-    print(f"Taz iniciado - Reportes cada {interval_minutes} minutos")
+    print(f"\U0001f9ec Taz iniciado - Reportes cada {interval_minutes} minutos")
     print("Enviando primer reporte...")
     send_taz_report()
 
