@@ -40,7 +40,10 @@ def format_taz_report(data):
     f_total = f1 + f2 + f3
 
     bayano_data = gen.get("bayano", {})
-    bayano_mw = bayano_data.get("bayano", 0)
+    b1 = bayano_data.get("bayano_1", 0)
+    b2 = bayano_data.get("bayano_2", 0)
+    b3 = bayano_data.get("bayano_3", 0)
+    bayano_total = b1 + b2 + b3
 
     emb_fortuna = embalses.get("fortuna", {})
     emb_bayano = embalses.get("bayano", {})
@@ -82,7 +85,10 @@ def format_taz_report(data):
 
     # Bayano
     lines.append("")
-    lines.append(f"Bayano: {bayano_mw:.2f} MW")
+    lines.append(f"Bayano (Total: {bayano_total:.2f} MW):")
+    lines.append(f"  Bayano 1: {b1:.2f} MW")
+    lines.append(f"  Bayano 2: {b2:.2f} MW")
+    lines.append(f"  Bayano 3: {b3:.2f} MW")
     if emb_bayano_pct > 0:
         lines.append(f"  Embalse: {emb_bayano_pct:.0f}%")
     elif emb_bayano.get("nivel", 0) > 0:
@@ -105,8 +111,12 @@ def format_taz_report(data):
         plantas_offline.append("Fortuna 2")
     if f3 == 0:
         plantas_offline.append("Fortuna 3")
-    if bayano_mw == 0:
-        plantas_offline.append("Bayano")
+    if b1 == 0:
+        plantas_offline.append("Bayano 1")
+    if b2 == 0:
+        plantas_offline.append("Bayano 2")
+    if b3 == 0:
+        plantas_offline.append("Bayano 3")
     if plantas_offline:
         alertas.append(f"Sin generacion: {', '.join(plantas_offline)}")
 

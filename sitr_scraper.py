@@ -197,13 +197,19 @@ def get_generation_data():
             "fortuna_2": 0.0,
             "fortuna_3": 0.0,
         }
-        bayano = {"bayano": 0.0}
+        bayano = {
+            "bayano_1": 0.0,
+            "bayano_2": 0.0,
+            "bayano_3": 0.0,
+        }
 
         # Palabras clave para clasificar por tipo
         HIDRO_KEYS = [
             "hidr", "agua", "chan", "bayano", "fortuna", "esti", "barro",
             "los valles", "gualaca", "caldera", "macho", "monte", "dolega",
             "bonyic", "bajo", "rio", "chiriqui", "piedra", "pando",
+            "bugaba", "cochea", "concepci", "madden", "mendre", "pedregalito",
+            "paso ancho", "lirio",
         ]
         TERM_KEYS = [
             "term", "gas", "diesel", "bunker", "carbon", "gnl", "lng",
@@ -243,7 +249,12 @@ def get_generation_data():
 
                 # Clasificar Bayano
                 if "bayano" in name_lower:
-                    bayano["bayano"] += value
+                    if "1" in name_lower:
+                        bayano["bayano_1"] = value
+                    elif "2" in name_lower:
+                        bayano["bayano_2"] = value
+                    elif "3" in name_lower:
+                        bayano["bayano_3"] = value
 
                 # Clasificar por fuente
                 if any(w in name_lower for w in HIDRO_KEYS):
