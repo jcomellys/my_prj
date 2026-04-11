@@ -47,6 +47,7 @@ def format_taz_report(data, prev):
     demanda = sin.get("demanda", 0)
     balance = generacion - demanda
     frecuencia = sin.get("frecuencia", 0)
+    reserva = sin.get("reserva_rodante", 0)
 
     by_source = gen.get("by_source", {})
     fortuna = gen.get("fortuna", {})
@@ -100,6 +101,7 @@ def format_taz_report(data, prev):
         f"\U0001f4ca Demanda: *{demanda:.2f}* MW",
         f"\u2696\ufe0f Balance: *{balance_sign}{balance:.2f}* MW",
         f"\U0001f504 Frecuencia: {freq_str}",
+        f"\U0001f6e1\ufe0f Reserva: *{reserva:.2f}* MW",
         "",
         "\U0001f3ed Por Fuente:",
         f"  \U0001f4a7 H\u00eddrica: {hidrica:.2f} MW ({pct(hidrica)})",
@@ -157,7 +159,11 @@ def format_taz_report(data, prev):
     alertas = []
     info = []
 
-    if generacion > 0 and balance < 200:
+    if reserva > 0:
+        reserva_pct = (reserva / generacion * 100) if generacion > 0 else 0
+        if reserva < 200:
+            alertas.append(f"Reserva operativa baja: {reserva_pct:.0f}% ({reserva:.0f} MW)")
+    elif generacion > 0 and balance < 200:
         reserva_pct = (balance / generacion * 100) if generacion > 0 else 0
         alertas.append(f"Reserva operativa baja: {reserva_pct:.0f}% ({balance:.0f} MW)")
 

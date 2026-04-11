@@ -116,7 +116,22 @@ def extract_js_data(soup):
 
 
 def get_sin_data():
-    """Obtiene datos generales del SIN: generacion, demanda, frecuencia."""
+    """Obtiene datos generales del SIN: generacion, demanda, frecuencia.
+
+    Estructura de sin.html:
+      <h5>Generación total</h5>
+      <h4>1832 MW</h4>
+      ...
+      <h5>Demanda Total</h5>
+      <h4>1637 MW</h4>
+      ...
+      <h5>Intercambio neto</h5>
+      <h4>194.76 MW</h4>
+      ...
+      <h5>Reserva rodante</h5>
+      <h4>205.62 MW</h4>
+    Frecuencia: div id="Fz" (cargado por JS)
+    """
     try:
         soup = fetch_page("/m/pub/sin.html")
 
@@ -124,52 +139,47 @@ def get_sin_data():
             "generacion": 0.0,
             "demanda": 0.0,
             "frecuencia": 0.0,
+            "intercambio_neto": 0.0,
+            "reserva_rodante": 0.0,
         }
 
-        # Intentar extraer de JavaScript
-        js_data = extract_js_data(soup)
-        if js_data:
-            data.update({k: v for k, v in js_data.items() if k in data})
+        # Buscar pares h5 (titulo) + h4 (valor) dentro de widgets
+        h5_tags = soup.find_all("h5")
+        for h5 in h5_tags:
+            title = h5.get_text(strip=True).lower()
+            # Buscar el h4 hermano mas cercano
+            h4 = h5.find_next("h4")
+            if not h4:
+                continue
+            val = parse_number(h4.get_text())
 
-        # Buscar en tablas
-        tds = soup.find_all("td")
-        for i, td in enumerate(tds):
-            td_text = td.get_text(strip=True).lower()
-            if any(w in td_text for w in ["generaci", "gen total", "gen.", "generation"]):
-                if i + 1 < len(tds):
-                    val = parse_number(tds[i + 1].get_text())
-                    if val > 0:
-                        data["generacion"] = val
-            elif any(w in td_text for w in ["demanda", "demand", "carga", "load"]):
-                if i + 1 < len(tds):
-                    val = parse_number(tds[i + 1].get_text())
-                    if val > 0:
-                        data["demanda"] = val
-            elif any(w in td_text for w in ["frecuencia", "freq", "hz"]):
-                if i + 1 < len(tds):
-                    val = parse_number(tds[i + 1].get_text())
-                    if val > 0:
+            if "generaci" in title and "total" in title:
+                data["generacion"] = val
+            elif "demanda" in title and "total" in title:
+                data["demanda"] = val
+            elif "intercambio neto" in title:
+                data["intercambio_neto"] = val
+            elif "reserva" in title:
+                data["reserva_rodante"] = val
+
+        # Frecuencia: buscar en scripts el valor del gauge (div id="Fz")
+        for script in soup.find_all("script"):
+            text = script.string or ""
+            # Buscar patron de datos del gauge: valor tipo 60.XXX
+            freq_patterns = [
+                r"data:\s*\[\s*\{\s*value:\s*([\d.]+)",
+                r"value:\s*(6[\d.]+)",
+                r"(60\.\d{2,3})",
+            ]
+            for pattern in freq_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    val = float(match.group(1))
+                    if 59 < val < 61:
                         data["frecuencia"] = val
-
-        # Buscar en spans, divs con IDs
-        for el in soup.find_all(["span", "div", "p", "label", "b", "strong"]):
-            el_text = el.get_text(strip=True)
-            el_id = (el.get("id") or "").lower()
-            el_class = " ".join(el.get("class") or []).lower()
-            attrs = el_id + " " + el_class
-
-            if any(w in attrs for w in ["gen", "generacion", "generation"]):
-                val = parse_number(el_text)
-                if val > 100:
-                    data["generacion"] = val
-            elif any(w in attrs for w in ["dem", "demanda", "demand", "carga"]):
-                val = parse_number(el_text)
-                if val > 100:
-                    data["demanda"] = val
-            elif any(w in attrs for w in ["freq", "frec", "frecuencia"]):
-                val = parse_number(el_text)
-                if 59 < val < 61:
-                    data["frecuencia"] = val
+                        break
+            if data["frecuencia"] > 0:
+                break
 
         return data
     except Exception as e:
@@ -445,9 +455,14 @@ def get_all_data():
         if sin["generacion"] == 0 and total_from_sources > 0:
             sin["generacion"] = round(total_from_sources, 2)
 
-        # Estimar demanda como ~95% de generacion si no la tenemos
         if sin["demanda"] == 0 and sin["generacion"] > 0:
             sin["demanda"] = round(sin["generacion"] * 0.95, 2)
+
+    # Usar intercambio neto del SIN si el scraper de int.html fallo
+    if sin and inter:
+        if inter["interconexion_mw"] == 0 and sin.get("intercambio_neto", 0) > 0:
+            inter["interconexion_mw"] = sin["intercambio_neto"]
+            inter["tipo"] = "Exportando" if sin["intercambio_neto"] > 0 else "Importando"
 
     return {
         "sin": sin,
