@@ -85,8 +85,7 @@ def format_taz_report(data, prev):
 
     emb_fortuna = embalses.get("fortuna", {})
     emb_bayano = embalses.get("bayano", {})
-    emb_fortuna_pct = emb_fortuna.get("pct", 0)
-    emb_bayano_pct = emb_bayano.get("pct", 0)
+    emb_chang = embalses.get("changuinola", {})
 
     inter_mw = inter.get("interconexion_mw", 0)
     inter_tipo = inter.get("tipo", "N/D")
@@ -114,10 +113,11 @@ def format_taz_report(data, prev):
         f"  \U0001f539 Fortuna 3: {f3:.2f} MW",
     ]
 
-    if emb_fortuna_pct > 0:
-        lines.append(f"  \U0001f4c8 Embalse: {emb_fortuna_pct:.0f}%")
+    # Embalse Fortuna
+    if emb_fortuna.get("pct", 0) > 0:
+        lines.append(f"  \U0001f4c8 Embalse: {emb_fortuna['pct']}% ({emb_fortuna.get('nivel', 0):.2f} msnm)")
     elif emb_fortuna.get("nivel", 0) > 0:
-        lines.append(f"  \U0001f4c8 Embalse: {emb_fortuna['nivel']:.1f} msnm")
+        lines.append(f"  \U0001f4c8 Embalse: {emb_fortuna['nivel']:.2f} msnm")
 
     lines.append("")
     lines.append(f"\U0001f4a1 Bayano (Total: {bayano_total:.2f} MW):")
@@ -125,10 +125,11 @@ def format_taz_report(data, prev):
     lines.append(f"  \U0001f539 Bayano 2: {b2:.2f} MW")
     lines.append(f"  \U0001f539 Bayano 3: {b3:.2f} MW")
 
-    if emb_bayano_pct > 0:
-        lines.append(f"  \U0001f4c8 Embalse: {emb_bayano_pct:.0f}%")
+    # Embalse Bayano
+    if emb_bayano.get("pct", 0) > 0:
+        lines.append(f"  \U0001f4c8 Embalse: {emb_bayano['pct']}% ({emb_bayano.get('nivel', 0):.2f} msnm)")
     elif emb_bayano.get("nivel", 0) > 0:
-        lines.append(f"  \U0001f4c8 Embalse: {emb_bayano['nivel']:.1f} msnm")
+        lines.append(f"  \U0001f4c8 Embalse: {emb_bayano['nivel']:.2f} msnm")
 
     # Changuinola
     lines.append("")
@@ -136,6 +137,10 @@ def format_taz_report(data, prev):
     lines.append(f"  \U0001f539 Changuinola 1: {ch1:.2f} MW")
     lines.append(f"  \U0001f539 Changuinola 2: {ch2:.2f} MW")
     lines.append(f"  \U0001f539 Changuinola 3: {ch3:.2f} MW")
+
+    # Embalse Changuinola
+    if emb_chang.get("pct", 0) > 0:
+        lines.append(f"  \U0001f4c8 Embalse: {emb_chang['pct']}% ({emb_chang.get('nivel', 0):.2f} msnm)")
 
     # Termicas grandes
     lines.append("")

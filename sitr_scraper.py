@@ -339,92 +339,93 @@ def get_interconnection_data():
 
 
 def get_embalse_data():
-    """Obtiene niveles de embalses (Fortuna, Bayano)."""
-    embalses = {
-        "fortuna": {"nivel": 0.0, "pct": 0.0},
-        "bayano": {"nivel": 0.0, "pct": 0.0},
-    }
+    """Obtiene niveles de embalses desde sin.html del SITR.
 
-    # Fortuna: max operativo ~1055 msnm, min ~1010 msnm
-    FORTUNA_MAX = 1055.0
-    FORTUNA_MIN = 1010.0
-    # Bayano: max operativo ~62 msnm, min ~50 msnm
-    BAYANO_MAX = 62.0
-    BAYANO_MIN = 50.0
+    La tabla tiene columnas: Embalse | Nivel minimo | Valor actual (con %) | Nivel maximo
+    Embalses: Changuinola 1, Bonyic, Fortuna, La Estrella, Mendre_Presa,
+              Mendre II, Esti_Chiriqui, Esti_Barrigon, Gualaca, Bayano, etc.
+    """
+    embalses = {}
 
-    # Intentar desde SITR (vert.html o sin.html)
-    for path in ["/m/pub/vert.html", "/m/pub/sin.html"]:
-        try:
-            soup = fetch_page(path)
-
-            # Buscar en JavaScript
-            for script in soup.find_all("script"):
-                text = script.string or ""
-                for pattern in [r"fortuna.*?(\d{4}\.?\d*)", r"nivel.*?fortuna.*?(\d{4}\.?\d*)"]:
-                    match = re.search(pattern, text, re.IGNORECASE)
-                    if match:
-                        val = float(match.group(1))
-                        if 1000 < val < 1100:
-                            embalses["fortuna"]["nivel"] = val
-                for pattern in [r"bayano.*?(\d{2}\.?\d*)", r"nivel.*?bayano.*?(\d{2}\.?\d*)"]:
-                    match = re.search(pattern, text, re.IGNORECASE)
-                    if match:
-                        val = float(match.group(1))
-                        if 40 < val < 70:
-                            embalses["bayano"]["nivel"] = val
-
-            # Buscar en tablas y elementos
-            for el in soup.find_all(["td", "span", "div", "p", "b", "label"]):
-                el_text = el.get_text(strip=True).lower()
-                el_id = (el.get("id") or "").lower()
-                combined = el_text + " " + el_id
-
-                if "fortuna" in combined and ("embalse" in combined or "nivel" in combined or "%" in el_text):
-                    val = parse_number(el.get_text())
-                    if 1000 < val < 1100:
-                        embalses["fortuna"]["nivel"] = val
-                    elif 0 < val <= 100:
-                        embalses["fortuna"]["pct"] = val
-
-                if "bayano" in combined and ("embalse" in combined or "nivel" in combined or "%" in el_text):
-                    val = parse_number(el.get_text())
-                    if 40 < val < 70:
-                        embalses["bayano"]["nivel"] = val
-                    elif 0 < val <= 100:
-                        embalses["bayano"]["pct"] = val
-        except Exception:
-            continue
-
-    # Intentar desde hidromet.com.pa como respaldo
     try:
-        resp = SESSION.get("https://www.hidromet.com.pa/es/centrales-hidroelectricas", timeout=10)
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, "html.parser")
-            text = soup.get_text(" ", strip=True)
+        soup = fetch_page("/m/pub/sin.html")
 
-            # Buscar niveles
-            fort_match = re.search(r"fortuna.*?(\d{4}\.?\d*)\s*msnm", text, re.IGNORECASE)
-            if fort_match:
-                embalses["fortuna"]["nivel"] = float(fort_match.group(1))
+        # Buscar la tabla de embalses
+        rows = soup.find_all("tr")
+        for row in rows:
+            cols = row.find_all("td")
+            if len(cols) >= 3:
+                name = cols[0].get_text(strip=True)
+                if not name:
+                    continue
+                name_lower = name.lower().replace("_", " ")
 
-            bay_match = re.search(r"bayano.*?(\d{2}\.?\d*)\s*msnm", text, re.IGNORECASE)
-            if bay_match:
-                embalses["bayano"]["nivel"] = float(bay_match.group(1))
-    except Exception:
-        pass
+                # Extraer valores de las columnas
+                # Col 0: Nombre, Col 1: Nivel minimo, Col 2: Valor actual (puede tener %), Col 3: Nivel maximo
+                nivel_min = parse_number(cols[1].get_text())
+                actual_text = cols[2].get_text(strip=True)
+                nivel_max = parse_number(cols[-1].get_text()) if len(cols) >= 4 else 0
 
-    # Calcular porcentaje si tenemos nivel pero no porcentaje
-    if embalses["fortuna"]["nivel"] > 0 and embalses["fortuna"]["pct"] == 0:
-        nivel = embalses["fortuna"]["nivel"]
-        embalses["fortuna"]["pct"] = round(
-            (nivel - FORTUNA_MIN) / (FORTUNA_MAX - FORTUNA_MIN) * 100, 1
-        )
+                # Extraer porcentaje (buscar "XX%" en el texto)
+                pct_match = re.search(r"(\d+)%", actual_text)
+                pct = int(pct_match.group(1)) if pct_match else 0
 
-    if embalses["bayano"]["nivel"] > 0 and embalses["bayano"]["pct"] == 0:
-        nivel = embalses["bayano"]["nivel"]
-        embalses["bayano"]["pct"] = round(
-            (nivel - BAYANO_MIN) / (BAYANO_MAX - BAYANO_MIN) * 100, 1
-        )
+                # Extraer nivel actual (el numero decimal mas grande)
+                numbers = re.findall(r"\d+\.?\d*", actual_text)
+                nivel_actual = 0.0
+                for n in numbers:
+                    val = float(n)
+                    # El nivel actual es el numero que esta entre min y max (o cercano)
+                    if val > 100 or (nivel_min > 0 and abs(val - nivel_min) < abs(val)):
+                        if val > nivel_actual and val != pct:
+                            nivel_actual = val
+
+                # Si no encontramos bien el nivel, buscar el que tenga decimales
+                if nivel_actual == 0:
+                    for n in numbers:
+                        val = float(n)
+                        if "." in n and val != pct:
+                            nivel_actual = val
+                            break
+
+                # Calcular porcentaje si no lo tenemos
+                if pct == 0 and nivel_min > 0 and nivel_max > nivel_min and nivel_actual > 0:
+                    pct = round((nivel_actual - nivel_min) / (nivel_max - nivel_min) * 100)
+
+                # Mapear nombres de embalses
+                key = None
+                if "fortuna" in name_lower:
+                    key = "fortuna"
+                elif "bayano" in name_lower:
+                    key = "bayano"
+                elif "changuinola" in name_lower:
+                    key = "changuinola"
+                elif "bonyic" in name_lower:
+                    key = "bonyic"
+                elif "estrella" in name_lower:
+                    key = "la_estrella"
+                elif "mendre" in name_lower and "presa" in name_lower:
+                    key = "mendre_presa"
+                elif "mendre" in name_lower:
+                    key = "mendre_ii"
+                elif "chiriqui" in name_lower or ("esti" in name_lower and "chir" in name_lower):
+                    key = "esti_chiriqui"
+                elif "barrigon" in name_lower or ("esti" in name_lower and "barr" in name_lower):
+                    key = "esti_barrigon"
+                elif "gualaca" in name_lower:
+                    key = "gualaca"
+
+                if key:
+                    embalses[key] = {
+                        "nombre": name,
+                        "nivel": nivel_actual,
+                        "nivel_min": nivel_min,
+                        "nivel_max": nivel_max,
+                        "pct": pct,
+                    }
+
+    except Exception as e:
+        print(f"Error obteniendo datos de embalses: {e}")
 
     return embalses
 
