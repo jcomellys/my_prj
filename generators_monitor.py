@@ -43,13 +43,15 @@ def format_taz_report(data):
 
     balance_sign = "+" if balance >= 0 else ""
 
+    freq_str = f"*{frecuencia:.2f}* Hz" if frecuencia > 0 else "N/D"
+
     lines = [
         f"REPORTE SIN - {now}",
         "=" * 30,
         f"Generacion: *{generacion:.2f}* MW",
         f"Demanda: *{demanda:.2f}* MW",
         f"Balance: *{balance_sign}{balance:.2f}* MW",
-        f"Frecuencia: *{frecuencia:.2f}* Hz",
+        f"Frecuencia: {freq_str}",
         "",
         "Por Fuente:",
         f"  Hidrica: {hidrica:.2f} MW ({pct(hidrica)})",
@@ -61,28 +63,36 @@ def format_taz_report(data):
         f"  Fortuna 1: {f1:.2f} MW",
         f"  Fortuna 2: {f2:.2f} MW",
         f"  Fortuna 3: {f3:.2f} MW",
-        "",
-        f"Interconexion: {inter_tipo} *{inter_mw:.2f}* MW",
     ]
+
+    if inter_mw > 0:
+        lines.append("")
+        lines.append(f"Interconexion: {inter_tipo} *{inter_mw:.2f}* MW")
 
     # Alertas
     alertas = []
-    if balance < 200:
+    if generacion > 0 and balance < 200:
         reserva_pct = (balance / generacion * 100) if generacion > 0 else 0
-        alertas.append(f"ALERTA: Reserva operativa baja: {reserva_pct:.0f}% ({balance:.0f} MW)")
+        alertas.append(f"Reserva operativa baja: {reserva_pct:.0f}% ({balance:.0f} MW)")
+
+    plantas_offline = []
     if f1 == 0:
-        alertas.append("ALERTA: Fortuna 1 sin generacion")
+        plantas_offline.append("Fortuna 1")
     if f2 == 0:
-        alertas.append("ALERTA: Fortuna 2 sin generacion")
+        plantas_offline.append("Fortuna 2")
     if f3 == 0:
-        alertas.append("ALERTA: Fortuna 3 sin generacion")
+        plantas_offline.append("Fortuna 3")
+    if plantas_offline:
+        alertas.append(f"Sin generacion: {', '.join(plantas_offline)}")
+
     if frecuencia > 0 and (frecuencia < 59.95 or frecuencia > 60.05):
-        alertas.append(f"ALERTA: Frecuencia fuera de rango: {frecuencia:.2f} Hz")
+        alertas.append(f"Frecuencia fuera de rango: {frecuencia:.2f} Hz")
 
     if alertas:
         lines.append("")
         lines.append("ALERTAS:")
-        lines.extend(alertas)
+        for a in alertas:
+            lines.append(f"  * {a}")
 
     lines.append("")
     lines.append("Taz - Monitoreo Continuo")
@@ -92,13 +102,21 @@ def format_taz_report(data):
 
 def send_taz_report():
     """Obtiene datos del SITR y envia reporte por WhatsApp."""
-    print(f"[{datetime.datetime.now()}] Obteniendo datos del SITR...")
-    data = get_all_data()
+    now = datetime.datetime.now().strftime("%H:%M")
+    print(f"[{now}] Obteniendo datos del SITR...")
 
-    if not data["sin"] and not data["generation"]:
+    try:
+        data = get_all_data()
+    except Exception as e:
+        print(f"Error: {e}")
+        send_whatsapp_message(f"ALERTA Taz {now}: Error obteniendo datos - {e}")
+        return
+
+    gen = data.get("generation")
+    if not gen or sum(gen.get("by_source", {}).values()) == 0:
         print("No se pudieron obtener datos del SITR.")
         send_whatsapp_message(
-            "ALERTA Taz: No se pudieron obtener datos del SITR. "
+            f"ALERTA Taz {now}: No se pudieron obtener datos del SITR. "
             "Verificar conexion con sitr.cnd.com.pa"
         )
         return
@@ -107,21 +125,22 @@ def send_taz_report():
     print(report)
     print("-" * 30)
     send_whatsapp_message(report)
-    print("Reporte Taz enviado por WhatsApp.")
+    print(f"[{now}] Reporte Taz enviado.")
 
 
-def start_monitoring(interval_minutes=30):
-    """Inicia el monitoreo periodico del SIN."""
+def start_monitoring(interval_minutes=60):
+    """Inicia el monitoreo cada hora."""
     print(f"Taz iniciado - Reportes cada {interval_minutes} minutos")
     print("Enviando primer reporte...")
     send_taz_report()
 
     schedule.every(interval_minutes).minutes.do(send_taz_report)
 
+    print(f"Proximo reporte en {interval_minutes} minutos. Ctrl+C para detener.")
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 
 if __name__ == "__main__":
-    start_monitoring(interval_minutes=30)
+    start_monitoring(interval_minutes=60)
