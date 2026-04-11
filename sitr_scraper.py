@@ -360,79 +360,89 @@ def get_embalse_data():
     try:
         soup = fetch_page("/m/pub/sin.html")
 
-        # Buscar la tabla de embalses
-        rows = soup.find_all("tr")
+        # Buscar filas con clase sitr-water (tabla de embalses)
+        rows = soup.find_all("tr", class_="sitr-water")
         for row in rows:
-            cols = row.find_all("td")
-            if len(cols) >= 3:
-                name = cols[0].get_text(strip=True)
-                if not name:
-                    continue
-                name_lower = name.lower().replace("_", " ")
+            # Buscar nombre del embalse (span con texto no numerico)
+            name = ""
+            for span in row.find_all("span"):
+                text = span.get_text(strip=True)
+                if text and not re.match(r"^[\d.%]+$", text):
+                    name = text
+                    break
 
-                # Extraer valores de las columnas
-                # Col 0: Nombre, Col 1: Nivel minimo, Col 2: Valor actual (puede tener %), Col 3: Nivel maximo
-                nivel_min = parse_number(cols[1].get_text())
-                actual_text = cols[2].get_text(strip=True)
-                nivel_max = parse_number(cols[-1].get_text()) if len(cols) >= 4 else 0
+            if not name:
+                continue
+            name_lower = name.lower().replace("_", " ")
 
-                # Extraer porcentaje (buscar "XX%" en el texto)
-                pct_match = re.search(r"(\d+)%", actual_text)
-                pct = int(pct_match.group(1)) if pct_match else 0
+            # Porcentaje: dentro de div.progress-bar span
+            pct = 0
+            progress = row.find("div", class_="progress-bar")
+            if progress:
+                pct_span = progress.find("span")
+                if pct_span:
+                    pct_match = re.search(r"(\d+)%", pct_span.get_text())
+                    if pct_match:
+                        pct = int(pct_match.group(1))
 
-                # Extraer nivel actual (el numero decimal mas grande)
-                numbers = re.findall(r"\d+\.?\d*", actual_text)
-                nivel_actual = 0.0
-                for n in numbers:
-                    val = float(n)
-                    # El nivel actual es el numero que esta entre min y max (o cercano)
-                    if val > 100 or (nivel_min > 0 and abs(val - nivel_min) < abs(val)):
-                        if val > nivel_actual and val != pct:
-                            nivel_actual = val
+            # Nivel actual: en <h6> (el numero coloreado)
+            nivel_actual = 0.0
+            h6 = row.find("h6")
+            if h6:
+                nivel_actual = parse_number(h6.get_text())
 
-                # Si no encontramos bien el nivel, buscar el que tenga decimales
-                if nivel_actual == 0:
-                    for n in numbers:
-                        val = float(n)
-                        if "." in n and val != pct:
-                            nivel_actual = val
-                            break
+            # Nivel minimo: en td.text-right span
+            nivel_min = 0.0
+            td_right = row.find("td", class_="text-right")
+            if td_right:
+                span = td_right.find("span")
+                if span:
+                    nivel_min = parse_number(span.get_text())
 
-                # Calcular porcentaje si no lo tenemos
-                if pct == 0 and nivel_min > 0 and nivel_max > nivel_min and nivel_actual > 0:
-                    pct = round((nivel_actual - nivel_min) / (nivel_max - nivel_min) * 100)
+            # Nivel maximo: ultimo td span (que no sea el nombre, min o actual)
+            nivel_max = 0.0
+            all_tds = row.find_all("td")
+            if all_tds:
+                last_td = all_tds[-1]
+                span = last_td.find("span")
+                if span:
+                    val = parse_number(span.get_text())
+                    if val > 0 and val != pct:
+                        nivel_max = val
 
-                # Mapear nombres de embalses
-                key = None
-                if "fortuna" in name_lower:
-                    key = "fortuna"
-                elif "bayano" in name_lower:
-                    key = "bayano"
-                elif "changuinola" in name_lower:
-                    key = "changuinola"
-                elif "bonyic" in name_lower:
-                    key = "bonyic"
-                elif "estrella" in name_lower:
-                    key = "la_estrella"
-                elif "mendre" in name_lower and "presa" in name_lower:
-                    key = "mendre_presa"
-                elif "mendre" in name_lower:
-                    key = "mendre_ii"
-                elif "chiriqui" in name_lower or ("esti" in name_lower and "chir" in name_lower):
-                    key = "esti_chiriqui"
-                elif "barrigon" in name_lower or ("esti" in name_lower and "barr" in name_lower):
-                    key = "esti_barrigon"
-                elif "gualaca" in name_lower:
-                    key = "gualaca"
+            # Mapear nombres
+            key = None
+            if "fortuna" in name_lower:
+                key = "fortuna"
+            elif "bayano" in name_lower:
+                key = "bayano"
+            elif "changuinola" in name_lower:
+                key = "changuinola"
+            elif "bonyic" in name_lower:
+                key = "bonyic"
+            elif "estrella" in name_lower:
+                key = "la_estrella"
+            elif "mendre" in name_lower and "presa" in name_lower:
+                key = "mendre_presa"
+            elif "mendre" in name_lower:
+                key = "mendre_ii"
+            elif "chiriqui" in name_lower or ("esti" in name_lower and "chir" in name_lower):
+                key = "esti_chiriqui"
+            elif "barrig" in name_lower or ("esti" in name_lower and "barr" in name_lower):
+                key = "esti_barrigon"
+            elif "gualaca" in name_lower:
+                key = "gualaca"
+            elif "lorena" in name_lower:
+                key = "lorena"
 
-                if key:
-                    embalses[key] = {
-                        "nombre": name,
-                        "nivel": nivel_actual,
-                        "nivel_min": nivel_min,
-                        "nivel_max": nivel_max,
-                        "pct": pct,
-                    }
+            if key:
+                embalses[key] = {
+                    "nombre": name,
+                    "nivel": nivel_actual,
+                    "nivel_min": nivel_min,
+                    "nivel_max": nivel_max,
+                    "pct": pct,
+                }
 
     except Exception as e:
         print(f"Error obteniendo datos de embalses: {e}")
