@@ -468,11 +468,15 @@ def get_all_data():
         if sin["demanda"] == 0 and sin["generacion"] > 0:
             sin["demanda"] = round(sin["generacion"] * 0.95, 2)
 
-    # Usar intercambio neto del SIN si el scraper de int.html fallo
+    # Siempre preferir intercambio neto de sin.html (mas preciso que int.html)
     if sin and inter:
-        if inter["interconexion_mw"] == 0 and sin.get("intercambio_neto", 0) > 0:
-            inter["interconexion_mw"] = sin["intercambio_neto"]
-            inter["tipo"] = "Exportando" if sin["intercambio_neto"] > 0 else "Importando"
+        intercambio = sin.get("intercambio_neto", 0)
+        if intercambio > 0:
+            inter["interconexion_mw"] = intercambio
+            inter["tipo"] = "Exportando"
+        elif intercambio < 0:
+            inter["interconexion_mw"] = abs(intercambio)
+            inter["tipo"] = "Importando"
 
     return {
         "sin": sin,
