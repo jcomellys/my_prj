@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fetch SITR Panama</title>
+</head>
+<body>
+<script>
+const SITR_BASE = "https://sitr.cnd.com.pa";
+
+function parseNumber(text) {
+  if (!text) return 0;
+  const match = text.replace(/,/g, "").match(/-?\d+\.?\d*/);
+  return match ? parseFloat(match[0]) : 0;
+}
+
+function parseSinPage(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const data = {
+    generacion: 0,
+    demanda: 0,
+    intercambio_neto: 0,
+    intercambio_programado: 0,
+    reserva_rodante: 0,
+    frecuencia: 0,
+    embalses: {},
+  };
+
+  // Parsear pares h5 (titulo) + h4 (valor)
+  const h5s = doc.querySelectorAll("h5");
+  h5s.forEach((h5) => {
+    const title = h5.textContent.trim().toLowerCase();
+    let h4 = h5.nextElementSibling;
+    while (h4 && h4.tagName !== "H4") h4 = h4.nextElementSibling;
+    if (!h4) {
+      // Buscar h4 mas cercano en el mismo widget
+      const parent = h5.parentElement;
+      if (parent) h4 = parent.querySelector("h4");
+    }
+    if (!h4) return;
+    const val = parseNumber(h4.textContent);
+    if (title.includes("generaci") && title.includes("total")) data.generacion = val;
+    else if (title.includes("demanda") && title.includes("total")) data.demanda = val;
+    else if (title.includes("intercambio neto")) data.intercambio_neto = val;
+    else if (title.includes("intercambio programado")) data.intercambio_programado = val;
+    else if (title.includes("reserva")) data.reserva_rodante = val;
+  });
+
+  // Frecuencia: buscar en scripts un valor 60.XXX
+  const scripts = doc.querySelectorAll("script");
+  scripts.forEach((script) => {
+    const text = script.textContent || "";
+    const m = text.match(/(6[01]\.\d{2,4})/);
+    if (m) {
+      const v = parseFloat(m[1]);
+      if (v > 59 && v < 61 && data.frecuencia === 0) data.frecuencia = v;
+    }
+  });
+
+  // Embalses: filas con clase sitr-water
+  const rows = doc.querySelectorAll("tr.sitr-water");
+  rows.forEach((row) => {
+    // Nombre
+    let name = "";
+    const spans = row.querySelectorAll("span");
+    for (const sp of spans) {
+      const t = sp.textContent.trim();
+      if (t && !/^[\d.%]+$/.test(t)) {
+        name = t;
+        break;
+      }
+    }
+    if (!name) return;
+
+    // Porcentaje
+    let pct = 0;
+    const progress = row.querySelector("div.progress-bar");
+    if (progress) {
+      const pSpan = progress.querySelector("span");
+      if (pSpan) {
+        const m = pSpan.textContent.match(/(\d+)%/);
+        if (m) pct = parseInt(m[1]);
+      }
+    }
+
+    // Nivel actual (h6)
+    let nivel = 0;
+    const h6 = row.querySelector("h6");
+    if (h6) nivel = parseNumber(h6.textContent);
+
+    // Nivel min
+    let nivelMin = 0;
+    const tdRight = row.querySelector("td.text-right");
+    if (tdRight) {
+      const sp = tdRight.querySelector("span");
+      if (sp) nivelMin = parseNumber(sp.textContent);
+    }
+
+    // Nivel max (ultimo td)
+    let nivelMax = 0;
+    const tds = row.querySelectorAll("td");
+    if (tds.length > 0) {
+      const lastTd = tds[tds.length - 1];
+      const sp = lastTd.querySelector("span");
+      if (sp) {
+        const v = parseNumber(sp.textContent);
+        if (v !== pct) nivelMax = v;
+      }
+    }
+
+    // Mapear clave
+    const nameLower = name.toLowerCase().replace(/_/g, " ");
+    let key = null;
+    if (nameLower.includes("fortuna")) key = "fortuna";
+    else if (nameLower.includes("bayano")) key = "bayano";
+    else if (nameLower.includes("changuinola")) key = "changuinola";
+    else if (nameLower.includes("bonyic")) key = "bonyic";
+    else if (nameLower.includes("estrella")) key = "la_estrella";
+    else if (nameLower.includes("mendre") && nameLower.includes("presa")) key = "mendre_presa";
+    else if (nameLower.includes("mendre")) key = "mendre_ii";
+    else if (nameLower.includes("chiriqui") || (nameLower.includes("esti") && nameLower.includes("chir"))) key = "esti_chiriqui";
+    else if (nameLower.includes("barrig") || (nameLower.includes("esti") && nameLower.includes("barr"))) key = "esti_barrigon";
+    else if (nameLower.includes("gualaca")) key = "gualaca";
+    else if (nameLower.includes("lorena")) key = "lorena";
+
+    if (key) {
+      data.embalses[key] = {
+        nombre: name,
+        nivel: nivel,
+        nivel_min: nivelMin,
+        nivel_max: nivelMax,
+        pct: pct,
+      };
+    }
+  });
+
+  return data;
+}
+
+function parseGenPage(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const plants = [];
+  const bySource = { hidrica: 0, termica: 0, solar: 0, eolica: 0 };
+  const fortuna = { fortuna_1: 0, fortuna_2: 0, fortuna_3: 0 };
+  const bayano = { bayano_1: 0, bayano_2: 0, bayano_3: 0 };
+  const changuinola = { changuinola_1: 0, changuinola_2: 0, changuinola_3: 0 };
+  const termicas = { gatun: 0, cobre: 0, costa_norte: 0 };
+
+  const HIDRO_KEYS = ["hidr", "agua", "chan", "bayano", "fortuna", "esti", "barro",
+    "los valles", "gualaca", "caldera", "macho", "monte", "dolega",
+    "bonyic", "bajo", "chiriqui", "piedra", "pando", "bugaba", "cochea",
+    "concepci", "madden", "mendre", "pedregalito", "paso ancho", "lirio"];
+  const TERM_KEYS = ["term", "gas", "diesel", "bunker", "carbon", "gnl", "lng",
+    "bahia", "cobre", "pacora", "jinro", "thermal", "gatun", "costa norte"];
+  const SOLAR_KEYS = ["solar", "foto", "pv"];
+  const EOLICA_KEYS = ["eol", "viento", "wind", "penonom"];
+
+  const rows = doc.querySelectorAll("tr");
+  rows.forEach((row) => {
+    const cols = row.querySelectorAll("td");
+    if (cols.length < 2) return;
+    const name = cols[0].textContent.trim();
+    if (!name || ["planta", "nombre", "central", "total"].includes(name.toLowerCase())) return;
+
+    let value = parseNumber(cols[cols.length - 1].textContent);
+    if (value === 0 && cols.length > 2) {
+      for (let i = 1; i < cols.length; i++) {
+        const v = parseNumber(cols[i].textContent);
+        if (v > 0) { value = v; break; }
+      }
+    }
+
+    const nameLower = name.toLowerCase();
+    plants.push({ name, mw: value });
+
+    // Fortuna
+    if (nameLower.includes("fortuna")) {
+      if (nameLower.includes("1")) fortuna.fortuna_1 = value;
+      else if (nameLower.includes("2")) fortuna.fortuna_2 = value;
+      else if (nameLower.includes("3")) fortuna.fortuna_3 = value;
+    }
+
+    // Bayano
+    if (nameLower.includes("bayano")) {
+      if (nameLower.includes("1")) bayano.bayano_1 = value;
+      else if (nameLower.includes("2")) bayano.bayano_2 = value;
+      else if (nameLower.includes("3")) bayano.bayano_3 = value;
+    }
+
+    // Changuinola
+    if (nameLower.includes("changuinola")) {
+      if (nameLower.includes("1")) changuinola.changuinola_1 = value;
+      else if (nameLower.includes("2")) changuinola.changuinola_2 = value;
+      else if (nameLower.includes("3")) changuinola.changuinola_3 = value;
+    }
+
+    // Termicas principales
+    if (nameLower.includes("gatun") || nameLower.includes("gat\u00fan")) termicas.gatun += value;
+    else if (nameLower.includes("cobre")) termicas.cobre += value;
+    else if (nameLower.includes("costa norte")) termicas.costa_norte += value;
+
+    // Por fuente
+    if (HIDRO_KEYS.some((k) => nameLower.includes(k))) bySource.hidrica += value;
+    else if (TERM_KEYS.some((k) => nameLower.includes(k))) bySource.termica += value;
+    else if (SOLAR_KEYS.some((k) => nameLower.includes(k))) bySource.solar += value;
+    else if (EOLICA_KEYS.some((k) => nameLower.includes(k))) bySource.eolica += value;
+  });
+
+  return { plants, by_source: bySource, fortuna, bayano, changuinola, termicas };
+}
+
+async function fetchSitr() {
+  const [sinResp, genResp] = await Promise.all([
+    fetch(`${SITR_BASE}/m/pub/sin.html`),
+    fetch(`${SITR_BASE}/m/pub/gen.html`),
+  ]);
+
+  if (!sinResp.ok) throw new Error(`SIN fetch failed: ${sinResp.status}`);
+  if (!genResp.ok) throw new Error(`GEN fetch failed: ${genResp.status}`);
+
+  const sinHtml = await sinResp.text();
+  const genHtml = await genResp.text();
+
+  const sin = parseSinPage(sinHtml);
+  const gen = parseGenPage(genHtml);
+
+  // Si la generacion del SIN esta en 0, calcular desde las fuentes
+  if (sin.generacion === 0) {
+    const total = gen.by_source.hidrica + gen.by_source.termica +
+                  gen.by_source.solar + gen.by_source.eolica;
+    if (total > 0) sin.generacion = Math.round(total * 100) / 100;
+  }
+
+  const now = new Date();
+  const timestamp = now.toISOString();
+
+  return {
+    timestamp,
+    hora_local: now.toLocaleString("es-PA", { timeZone: "America/Panama" }),
+    generacion_mw: sin.generacion,
+    demanda_mw: sin.demanda,
+    balance_mw: Math.round((sin.generacion - sin.demanda) * 100) / 100,
+    frecuencia_hz: sin.frecuencia,
+    reserva_rodante_mw: sin.reserva_rodante,
+    intercambio_neto_mw: sin.intercambio_neto,
+    intercambio_programado_mw: sin.intercambio_programado,
+    por_fuente: gen.by_source,
+    fortuna: gen.fortuna,
+    bayano: gen.bayano,
+    changuinola: gen.changuinola,
+    termicas_principales: gen.termicas,
+    embalses: sin.embalses,
+  };
+}
+
+window["ai_edge_gallery_get_result"] = async (data) => {
+  try {
+    const result = await fetchSitr();
+    return JSON.stringify({ result: JSON.stringify(result, null, 2) });
+  } catch (e) {
+    return JSON.stringify({ error: `Error obteniendo datos del SITR: ${e.message}` });
+  }
+};
+</script>
+</body>
+</html>
