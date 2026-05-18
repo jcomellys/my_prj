@@ -63,14 +63,16 @@ hears it. Same loop, no typing.
       a `delegate_to_deep_brain` tool calls the expensive model when
       needed. The expensive model returns text that the cheap model
       narrates to the user.
-- [ ] `internal/cost/tracker.go` — SQLite (modernc.org/sqlite, pure
-      Go) recording every brain call: provider, model, tokens in/out,
-      cached tokens, USD cost, session id, timestamp.
-- [ ] Pricing table (`internal/cost/pricing.go`) — maintainable map of
-      model → $ per 1M tokens (input, output, cached).
-- [ ] Tool: `show_cost_today` so the user can ask "cuánto llevo
-      gastado hoy".
+- [x] `internal/cost/tracker.go` — append-only NDJSON cost log
+      (zero-deps, USB-portable, crash-safe). Records every brain call:
+      timestamp, session id, brain name, tokens in/out/cached, USD.
+- [x] Pricing table (`internal/cost/pricing.go`) — map of brain name
+      → $ per 1M tokens (input, output, cached). Defaults shipped for
+      OpenAI gpt-5 family and Anthropic Claude 4 family.
+- [x] Tool: `show_cost` so the user can ask "cuánto llevo gastado hoy"
+      / "este mes" — brain calls the tool and narrates the result.
 - [ ] Hard-stop when `monthly_budget_usd` exceeded (configurable).
+- [ ] User-overrideable pricing via config (for when prices change).
 
 **Exit criterion:** User can run a 30-minute session and see real cost
 in the cost log. Cost on `cheap` profile is well below $1/hour.

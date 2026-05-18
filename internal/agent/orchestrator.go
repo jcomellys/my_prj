@@ -7,22 +7,30 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
+	"github.com/jcomellys/voice-mac-agent/internal/cost"
 	"github.com/jcomellys/voice-mac-agent/internal/tools"
 	"github.com/jcomellys/voice-mac-agent/internal/voice"
 )
 
 // Orchestrator is the runtime composed in main.go.
 type Orchestrator struct {
-	Voice    voice.Provider
-	Brain    brain.Brain
-	Tools    *tools.Registry
-	System   string // system prompt
-	MaxRounds int   // hard cap on tool-call rounds per user turn (prevents loops)
-	Log      *slog.Logger
+	Voice     voice.Provider
+	Brain     brain.Brain
+	Tools     *tools.Registry
+	System    string // system prompt
+	MaxRounds int    // hard cap on tool-call rounds per user turn (prevents loops)
+	Log       *slog.Logger
+
+	// Cost is optional; if nil, no logging is performed.
+	Cost      *cost.Tracker
+	Pricing   cost.Pricing // resolved from cost.Lookup at construction
+	SessionID string
 
 	// running conversation state — kept short by SummarizeIfLarge later
 	history []brain.Message
@@ -36,9 +44,31 @@ func New(v voice.Provider, b brain.Brain, reg *tools.Registry, system string, lo
 		System:    system,
 		MaxRounds: 6,
 		Log:       log,
+		SessionID: newSessionID(),
 	}
 	o.reset()
 	return o
+}
+
+// WithCost attaches a cost tracker. Pricing is resolved from the brain's
+// Name(); if unknown, cost is recorded as 0 and a warning is logged.
+func (o *Orchestrator) WithCost(t *cost.Tracker) *Orchestrator {
+	o.Cost = t
+	if p, ok := cost.Lookup(o.Brain.Name()); ok {
+		o.Pricing = p
+	} else {
+		o.Log.Warn("cost.pricing.unknown",
+			"brain", o.Brain.Name(),
+			"hint", "add an entry in internal/cost/pricing.go to track this brain's cost",
+		)
+	}
+	return o
+}
+
+func newSessionID() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
 
 func (o *Orchestrator) reset() {
@@ -63,6 +93,7 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 		if err != nil {
 			return "", fmt.Errorf("brain: %w", err)
 		}
+		usd := o.Pricing.USD(resp.Usage.InputTokens, resp.Usage.OutputTokens, resp.Usage.CachedInputTokens)
 		o.Log.Info("brain.response",
 			"round", round,
 			"text_len", len(resp.Text),
@@ -70,7 +101,18 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 			"in_tokens", resp.Usage.InputTokens,
 			"out_tokens", resp.Usage.OutputTokens,
 			"cached_in_tokens", resp.Usage.CachedInputTokens,
+			"usd", usd,
 		)
+		if o.Cost != nil {
+			_ = o.Cost.Record(cost.Entry{
+				SessionID:         o.SessionID,
+				BrainName:         o.Brain.Name(),
+				InputTokens:       resp.Usage.InputTokens,
+				OutputTokens:      resp.Usage.OutputTokens,
+				CachedInputTokens: resp.Usage.CachedInputTokens,
+				USD:               usd,
+			})
+		}
 
 		// Record the assistant turn (text + tool calls) in history.
 		o.history = append(o.history, brain.Message{

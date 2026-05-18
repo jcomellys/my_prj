@@ -13,11 +13,12 @@ config.local.yaml
 /agent
 /agent-*
 
-# Cost tracker DB
+# Cost tracker
 *.db
 *.db-journal
 *.sqlite
 *.sqlite-journal
+cost.log
 
 # Go
 *.test

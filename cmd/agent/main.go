@@ -17,6 +17,7 @@ import (
 	"github.com/jcomellys/voice-mac-agent/internal/activator"
 	"github.com/jcomellys/voice-mac-agent/internal/agent"
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
+	"github.com/jcomellys/voice-mac-agent/internal/cost"
 	"github.com/jcomellys/voice-mac-agent/internal/osadapter"
 	"github.com/jcomellys/voice-mac-agent/internal/stt"
 	"github.com/jcomellys/voice-mac-agent/internal/tools"
@@ -54,6 +55,17 @@ func main() {
 	}
 	log.Info("brain.ready", "name", b.Name())
 
+	// --- Cost tracker -------------------------------------------------------
+	var tracker *cost.Tracker
+	if cfg.Cost.Enabled {
+		t, err := cost.NewTracker("cost.log")
+		if err != nil {
+			fatal(log, err)
+		}
+		tracker = t
+		log.Info("cost.tracker.ready", "path", "cost.log")
+	}
+
 	// --- OS Adapter + Tools -------------------------------------------------
 	osa := osadapter.NewMacOS()
 	registry := tools.NewRegistry()
@@ -66,6 +78,9 @@ func main() {
 	if cfg.Tools.Shell.Enabled {
 		registry.Register(tools.NewShell(osa, cfg.Tools.Shell.AllowUnrestricted, cfg.Tools.Shell.Allowlist))
 	}
+	if tracker != nil {
+		registry.Register(tools.NewShowCost(tracker))
+	}
 	log.Info("tools.registered", "count", len(registry.Specs()))
 
 	// --- Voice (STT + TTS + Activator) --------------------------------------
@@ -77,6 +92,9 @@ func main() {
 
 	// --- Orchestrator -------------------------------------------------------
 	orch := agent.New(v, b, registry, agent.DefaultSystemPrompt, log)
+	if tracker != nil {
+		orch.WithCost(tracker)
+	}
 
 	// --- Run ----------------------------------------------------------------
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

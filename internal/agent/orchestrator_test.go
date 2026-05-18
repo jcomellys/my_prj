@@ -4,10 +4,13 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
+	"github.com/jcomellys/voice-mac-agent/internal/cost"
 	"github.com/jcomellys/voice-mac-agent/internal/tools"
 )
 
@@ -153,6 +156,72 @@ func TestOrchestrator_MaxRoundsCap(t *testing.T) {
 	if probe.called > orch.MaxRounds {
 		t.Errorf("tool called more than MaxRounds: %d > %d", probe.called, orch.MaxRounds)
 	}
+}
+
+func TestOrchestrator_RecordsCostPerBrainCall(t *testing.T) {
+	// Brain that names itself as a known-priced model.
+	type priced struct {
+		resp brain.Response
+	}
+	b := &pricedBrain{
+		name: "openai:gpt-5",
+		resp: brain.Response{
+			Text: "done",
+			Usage: brain.Usage{
+				InputTokens:       1000,
+				OutputTokens:      500,
+				CachedInputTokens: 200,
+			},
+		},
+	}
+
+	dir := t.TempDir()
+	tr, err := cost.NewTracker(filepath.Join(dir, "cost.log"))
+	if err != nil {
+		t.Fatalf("NewTracker: %v", err)
+	}
+	orch := New(nil, b, tools.NewRegistry(), "sys", quietLogger()).WithCost(tr)
+
+	if _, err := orch.HandleUtterance(context.Background(), "hi"); err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+
+	s, err := tr.Since(time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("Since: %v", err)
+	}
+	if s.Entries != 1 {
+		t.Fatalf("expected 1 cost entry, got %d", s.Entries)
+	}
+	if s.InputTokens != 1000 || s.OutputTokens != 500 || s.CachedTokens != 200 {
+		t.Errorf("token aggregation wrong: %+v", s)
+	}
+	// Pricing for openai:gpt-5 in cost.DefaultPrices: in=$5/M, out=$20/M, cached=$0.50/M.
+	// regular_in = 800. usd = (800*5 + 200*0.5 + 500*20) / 1e6 = 0.0141.
+	wantUSD := (800.0*5 + 200.0*0.5 + 500.0*20) / 1_000_000.0
+	if absf(s.USD-wantUSD) > 1e-9 {
+		t.Errorf("USD aggregation wrong: got %v, want %v", s.USD, wantUSD)
+	}
+}
+
+func absf(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// pricedBrain returns the same Response every call. Distinct from
+// scriptedBrain so the cost test can pre-configure a Usage.
+type pricedBrain struct {
+	name string
+	resp brain.Response
+}
+
+func (p *pricedBrain) Name() string { return p.name }
+func (p *pricedBrain) Chat(_ context.Context, _ []brain.Message, _ []brain.ToolSpec) (*brain.Response, error) {
+	r := p.resp
+	return &r, nil
 }
 
 func TestOrchestrator_HistoryGrowsAcrossUtterances(t *testing.T) {
