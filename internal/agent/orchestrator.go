@@ -1,0 +1,114 @@
+// Package agent is the orchestrator. It glues the Voice provider to the Brain
+// and Tools, runs the conversation loop, and tracks cost.
+//
+// The orchestrator is intentionally small: each piece (Voice, Brain, Tools)
+// is an interface. Swapping a provider is a config change, not a code change.
+package agent
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/jcomellys/voice-mac-agent/internal/brain"
+	"github.com/jcomellys/voice-mac-agent/internal/tools"
+	"github.com/jcomellys/voice-mac-agent/internal/voice"
+)
+
+// Orchestrator is the runtime composed in main.go.
+type Orchestrator struct {
+	Voice    voice.Provider
+	Brain    brain.Brain
+	Tools    *tools.Registry
+	System   string // system prompt
+	MaxRounds int   // hard cap on tool-call rounds per user turn (prevents loops)
+	Log      *slog.Logger
+
+	// running conversation state — kept short by SummarizeIfLarge later
+	history []brain.Message
+}
+
+func New(v voice.Provider, b brain.Brain, reg *tools.Registry, system string, log *slog.Logger) *Orchestrator {
+	o := &Orchestrator{
+		Voice:     v,
+		Brain:     b,
+		Tools:     reg,
+		System:    system,
+		MaxRounds: 6,
+		Log:       log,
+	}
+	o.reset()
+	return o
+}
+
+func (o *Orchestrator) reset() {
+	o.history = []brain.Message{{Role: brain.RoleSystem, Content: o.System}}
+}
+
+// Run starts the voice loop. Blocks until ctx is cancelled.
+func (o *Orchestrator) Run(ctx context.Context) error {
+	return o.Voice.Start(ctx, o)
+}
+
+// HandleUtterance implements voice.Handler.
+//
+// Loop: append user msg -> Brain -> if tool calls, execute and feed back -> repeat.
+// Stops when the Brain returns text and no tool calls (final reply for the user).
+func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (string, error) {
+	o.history = append(o.history, brain.Message{Role: brain.RoleUser, Content: userText})
+	specs := o.Tools.Specs()
+
+	for round := 0; round < o.MaxRounds; round++ {
+		resp, err := o.Brain.Chat(ctx, o.history, specs)
+		if err != nil {
+			return "", fmt.Errorf("brain: %w", err)
+		}
+		o.Log.Info("brain.response",
+			"round", round,
+			"text_len", len(resp.Text),
+			"tool_calls", len(resp.ToolCalls),
+			"in_tokens", resp.Usage.InputTokens,
+			"out_tokens", resp.Usage.OutputTokens,
+			"cached_in_tokens", resp.Usage.CachedInputTokens,
+		)
+
+		// Record the assistant turn (text + tool calls) in history.
+		o.history = append(o.history, brain.Message{
+			Role:      brain.RoleAssistant,
+			Content:   resp.Text,
+			ToolCalls: resp.ToolCalls,
+		})
+
+		// No tools requested: final reply.
+		if len(resp.ToolCalls) == 0 {
+			return resp.Text, nil
+		}
+
+		// Execute each tool call and append its result.
+		for _, tc := range resp.ToolCalls {
+			result, err := o.runTool(ctx, tc)
+			if err != nil {
+				result = "ERROR: " + err.Error()
+				o.Log.Warn("tool.error", "tool", tc.Name, "err", err)
+			} else {
+				o.Log.Info("tool.ok", "tool", tc.Name)
+			}
+			o.history = append(o.history, brain.Message{
+				Role:       brain.RoleTool,
+				Name:       tc.Name,
+				ToolCallID: tc.ID,
+				Content:    result,
+			})
+		}
+	}
+
+	return "Lo siento, no pude completar la tarea en un número razonable de pasos.", nil
+}
+
+func (o *Orchestrator) runTool(ctx context.Context, tc brain.ToolCall) (string, error) {
+	t, ok := o.Tools.Get(tc.Name)
+	if !ok {
+		return "", fmt.Errorf("unknown tool: %s", tc.Name)
+	}
+	return t.Execute(ctx, tc.Arguments)
+}

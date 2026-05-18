@@ -1,0 +1,176 @@
+// Command agent is the voice-controlled Mac agent entry point.
+//
+// Run with: go run ./cmd/agent --config config.yaml
+package main
+
+import (
+	"bufio"
+	"context"
+	"flag"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+
+	"github.com/jcomellys/voice-mac-agent/internal/activator"
+	"github.com/jcomellys/voice-mac-agent/internal/agent"
+	"github.com/jcomellys/voice-mac-agent/internal/brain"
+	"github.com/jcomellys/voice-mac-agent/internal/osadapter"
+	"github.com/jcomellys/voice-mac-agent/internal/stt"
+	"github.com/jcomellys/voice-mac-agent/internal/tools"
+	"github.com/jcomellys/voice-mac-agent/internal/tts"
+	"github.com/jcomellys/voice-mac-agent/internal/voice"
+)
+
+func main() {
+	var (
+		configPath = flag.String("config", "config.yaml", "path to YAML config")
+		envFile    = flag.String("env", ".env", "path to .env file (optional)")
+		verbose    = flag.Bool("v", false, "verbose logging")
+	)
+	flag.Parse()
+
+	loadDotEnv(*envFile)
+
+	level := slog.LevelInfo
+	if *verbose {
+		level = slog.LevelDebug
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+
+	cfg, err := agent.LoadConfig(*configPath)
+	if err != nil {
+		fatal(log, err)
+	}
+	prof := cfg.Active()
+	log.Info("config.loaded", "profile", cfg.ActiveProfile)
+
+	// --- Brain ---------------------------------------------------------------
+	b, err := buildBrain(prof.Brain)
+	if err != nil {
+		fatal(log, err)
+	}
+	log.Info("brain.ready", "name", b.Name())
+
+	// --- OS Adapter + Tools -------------------------------------------------
+	osa := osadapter.NewMacOS()
+	registry := tools.NewRegistry()
+	if cfg.Tools.OpenApp.Enabled {
+		registry.Register(tools.NewOpenApp(osa))
+	}
+	if cfg.Tools.AppleScript.Enabled {
+		registry.Register(tools.NewAppleScript(osa))
+	}
+	if cfg.Tools.Shell.Enabled {
+		registry.Register(tools.NewShell(osa, cfg.Tools.Shell.AllowUnrestricted, cfg.Tools.Shell.Allowlist))
+	}
+	log.Info("tools.registered", "count", len(registry.Specs()))
+
+	// --- Voice (STT + TTS + Activator) --------------------------------------
+	v, err := buildVoice(prof.Voice, prof.Activator)
+	if err != nil {
+		fatal(log, err)
+	}
+	log.Info("voice.ready", "name", v.Name())
+
+	// --- Orchestrator -------------------------------------------------------
+	orch := agent.New(v, b, registry, agent.DefaultSystemPrompt, log)
+
+	// --- Run ----------------------------------------------------------------
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	fmt.Println("Agente listo. Escribe lo que quieras decir y presiona Enter. Ctrl-C para salir.")
+	if err := orch.Run(ctx); err != nil && err != context.Canceled {
+		fatal(log, err)
+	}
+}
+
+func buildBrain(c agent.BrainConfig) (brain.Brain, error) {
+	switch c.Provider {
+	case "openai":
+		key := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+		if key == "" {
+			return nil, fmt.Errorf("brain.provider=openai but OPENAI_API_KEY is unset")
+		}
+		b := brain.NewOpenAI(key, c.Model)
+		b.Temperature = c.Temperature
+		b.MaxTokens = c.MaxTokens
+		return b, nil
+	case "mock", "":
+		return brain.NewMock(), nil
+	default:
+		return nil, fmt.Errorf("brain.provider=%q not yet wired in fase 0.1 (anthropic, gemini, ollama come in 0.4-0.5)", c.Provider)
+	}
+}
+
+func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider, error) {
+	if vc.Mode != "" && vc.Mode != "pipeline" {
+		return nil, fmt.Errorf("voice.mode=%q not yet supported (only pipeline in fase 0.1)", vc.Mode)
+	}
+
+	var sttImpl stt.STT
+	switch vc.STT.Provider {
+	case "stdin", "":
+		sttImpl = stt.NewStdin()
+	default:
+		return nil, fmt.Errorf("stt.provider=%q not yet wired (whisper_cpp comes in fase 0.2)", vc.STT.Provider)
+	}
+
+	var ttsImpl tts.TTS
+	switch vc.TTS.Provider {
+	case "macos_say", "":
+		ttsImpl = tts.NewMacOSSay(vc.TTS.Voice, vc.TTS.Rate)
+	default:
+		return nil, fmt.Errorf("tts.provider=%q not yet wired", vc.TTS.Provider)
+	}
+
+	var actImpl activator.Activator
+	switch ac.Kind {
+	case "stdin", "":
+		actImpl = activator.NewAlwaysOn()
+	default:
+		return nil, fmt.Errorf("activator.kind=%q not yet wired (hotkey global comes in fase 0.3)", ac.Kind)
+	}
+
+	return voice.NewPipeline(sttImpl, ttsImpl, actImpl), nil
+}
+
+// loadDotEnv parses a minimal KEY=VALUE .env file (no quotes/escapes) and
+// sets entries into the process env if they are not already set.
+// Silent on missing file — the user may set env vars another way.
+func loadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.TrimSpace(line[eq+1:])
+		// Strip optional surrounding quotes.
+		if len(val) >= 2 && (val[0] == '"' || val[0] == '\'') && val[len(val)-1] == val[0] {
+			val = val[1 : len(val)-1]
+		}
+		if _, present := os.LookupEnv(key); !present {
+			_ = os.Setenv(key, val)
+		}
+	}
+}
+
+func fatal(log *slog.Logger, err error) {
+	log.Error("fatal", "err", err)
+	os.Exit(1)
+}

@@ -1,0 +1,31 @@
+# Secrets — NEVER commit
+.env
+.env.local
+*.key
+
+# Local config overrides
+config.yaml
+config.local.yaml
+
+# Build artifacts
+/bin/
+/dist/
+/agent
+/agent-*
+
+# Cost tracker DB
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+
+# Go
+*.test
+*.out
+coverage.txt
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

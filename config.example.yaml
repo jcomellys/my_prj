@@ -1,0 +1,76 @@
+# Voice Mac Agent — example configuration.
+# Copy to config.yaml and edit. The active profile is selected at the top.
+
+active_profile: free
+
+profiles:
+
+  # Tier 0 — fully local, $0 cost.
+  # Brain runs on your Mac via Ollama. STT/TTS local.
+  free:
+    voice:
+      mode: pipeline
+      stt:
+        provider: stdin      # placeholder until whisper.cpp is wired in fase 0.2
+      tts:
+        provider: macos_say  # native macOS voices (Tahoe has excellent ones)
+        voice: ""            # empty = system default. Try "Mónica" (es) or "Samantha" (en)
+        rate: 200            # words per minute
+    brain:
+      provider: ollama
+      model: llama3.3:8b     # cabe holgado en M4. Cambiar a qwen2.5:14b para mejor razonamiento
+      temperature: 0.3
+      max_tokens: 2048
+    activator:
+      kind: stdin            # press Enter to activate. hotkey global llega en fase 0.3
+
+  # Tier 1 — cheap cloud brain, local audio.
+  cheap:
+    voice:
+      mode: pipeline
+      stt:
+        provider: stdin
+      tts:
+        provider: macos_say
+    brain:
+      provider: openai
+      model: gpt-5-mini      # router barato. Escala a gpt-5 cuando hace falta
+      temperature: 0.3
+      max_tokens: 2048
+    activator:
+      kind: stdin
+
+  # Tier 2 — premium cloud everything (default for paying users).
+  premium:
+    voice:
+      mode: pipeline
+      stt:
+        provider: stdin      # whisper.cpp en fase 0.2; openai_realtime en fase 1
+      tts:
+        provider: macos_say
+    brain:
+      provider: openai
+      model: gpt-5
+      temperature: 0.3
+      max_tokens: 4096
+    activator:
+      kind: stdin
+
+# Tool permissions. The user grants per-tool. Listed here for transparency.
+tools:
+  shell:
+    enabled: true
+    allow_unrestricted: false   # if false, only commands in shell.allowlist run unprompted
+    allowlist:
+      - "open "
+      - "osascript "
+  open_app:
+    enabled: true
+  applescript:
+    enabled: true
+
+# Cost tracking — stored locally in cost.db (SQLite). Shown on demand.
+cost:
+  enabled: true
+  monthly_budget_usd: 0       # 0 = no limit; otherwise hard-stop when exceeded
+  warn_at_pct: 80
