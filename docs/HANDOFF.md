@@ -32,10 +32,15 @@ Honesty mandate: the user explicitly asked for "the truth and nothing but
 the truth". Do not oversell timelines. Do not claim "1 week" when the
 honest answer is "3 months for that quality". Do not skip risks.
 
-## Current state — fase 0.1
+## Current state — fase 0.1 + brains expansion + tests
 
-The skeleton is in. It compiles clean for `linux/amd64` and
-`darwin/arm64` (`go vet` clean too). One end-to-end path works:
+The skeleton is in, plus the multi-provider promise is now real: three
+brains are implemented (OpenAI, Anthropic with prompt caching, Ollama
+for the free tier). A unit-test suite covers the orchestrator, brains,
+tools, and config (~25 tests, all passing with `-race`). It compiles
+clean for `linux/amd64` and `darwin/arm64` (`go vet` clean too).
+
+One end-to-end path works:
 
 ```
 user types at terminal

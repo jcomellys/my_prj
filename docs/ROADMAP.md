@@ -57,7 +57,8 @@ hears it. Same loop, no typing.
 
 ## Fase 0.4 — Two-tier brain + cost tracking
 
-- [ ] `internal/brain/anthropic.go` — Claude with prompt caching.
+- [x] `internal/brain/anthropic.go` — Claude with prompt caching (system
+      prompt + tool block both marked `cache_control: ephemeral`).
 - [ ] Router/escalation: agent picks `gpt-5-mini` (or Haiku) first;
       a `delegate_to_deep_brain` tool calls the expensive model when
       needed. The expensive model returns text that the cheap model
@@ -76,10 +77,10 @@ in the cost log. Cost on `cheap` profile is well below $1/hour.
 
 ## Fase 0.5 — Free tier complete (Ollama)
 
-- [ ] `internal/brain/ollama.go` — local LLM via Ollama HTTP API.
-      Must support tool calling (Llama 3.3 and Qwen 2.5 both do).
+- [x] `internal/brain/ollama.go` — local LLM via Ollama HTTP API with
+      tool calling support.
 - [ ] Verify Llama 3.3 8B can reliably invoke `open_app` and a
-      handful of AppleScript-based tools on M4.
+      handful of AppleScript-based tools on M4 (needs Mac mini test).
 - [ ] Document tradeoff: local models are slower and weaker; the user
       should not expect "abre Word y escribe un ensayo sobre Newton"
       to work perfectly on local. Simple control: yes. Heavy

@@ -40,6 +40,22 @@ profiles:
     activator:
       kind: stdin
 
+  # Tier 1b — Claude variant with aggressive prompt caching.
+  cheap_claude:
+    voice:
+      mode: pipeline
+      stt:
+        provider: stdin
+      tts:
+        provider: macos_say
+    brain:
+      provider: anthropic
+      model: claude-haiku-4-5  # router barato + cache_control sobre system+tools
+      temperature: 0.3
+      max_tokens: 2048
+    activator:
+      kind: stdin
+
   # Tier 2 — premium cloud everything (default for paying users).
   premium:
     voice:

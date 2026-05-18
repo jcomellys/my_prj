@@ -99,10 +99,27 @@ func buildBrain(c agent.BrainConfig) (brain.Brain, error) {
 		b.Temperature = c.Temperature
 		b.MaxTokens = c.MaxTokens
 		return b, nil
+	case "anthropic":
+		key := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
+		if key == "" {
+			return nil, fmt.Errorf("brain.provider=anthropic but ANTHROPIC_API_KEY is unset")
+		}
+		b := brain.NewAnthropic(key, c.Model)
+		b.Temperature = c.Temperature
+		if c.MaxTokens > 0 {
+			b.MaxTokens = c.MaxTokens
+		}
+		return b, nil
+	case "ollama":
+		host := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+		b := brain.NewOllama(host, c.Model)
+		b.Temperature = c.Temperature
+		b.NumPredict = c.MaxTokens
+		return b, nil
 	case "mock", "":
 		return brain.NewMock(), nil
 	default:
-		return nil, fmt.Errorf("brain.provider=%q not yet wired in fase 0.1 (anthropic, gemini, ollama come in 0.4-0.5)", c.Provider)
+		return nil, fmt.Errorf("brain.provider=%q not yet wired (gemini comes later)", c.Provider)
 	}
 }
 
