@@ -20,6 +20,10 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"costo",
 		// Phrasing of the visual-intent the brain should recognize.
 		"pantalla",
+		// Chrome-via-AppleScript patterns (fase 0.3.3a).
+		"Chrome",
+		"execute",
+		"Apple Events",
 	}
 	for _, s := range required {
 		if !strings.Contains(strings.ToLower(DefaultSystemPrompt), strings.ToLower(s)) {
