@@ -131,11 +131,12 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 		// attached images, e.g. from the screenshot tool).
 		for _, tc := range resp.ToolCalls {
 			res, err := o.runTool(ctx, tc)
+			argsAudit := truncateForLog(tc.Arguments, 800)
 			if err != nil {
 				res = tools.Result{Text: "ERROR: " + err.Error()}
-				o.Log.Warn("tool.error", "tool", tc.Name, "err", err)
+				o.Log.Warn("tool.error", "tool", tc.Name, "args", argsAudit, "err", err)
 			} else {
-				o.Log.Info("tool.ok", "tool", tc.Name, "images", len(res.Images))
+				o.Log.Info("tool.ok", "tool", tc.Name, "args", argsAudit, "images", len(res.Images))
 			}
 			o.history = append(o.history, brain.Message{
 				Role:       brain.RoleTool,
@@ -156,4 +157,24 @@ func (o *Orchestrator) runTool(ctx context.Context, tc brain.ToolCall) (tools.Re
 		return tools.Result{}, fmt.Errorf("unknown tool: %s", tc.Name)
 	}
 	return t.Execute(ctx, tc.Arguments)
+}
+
+// truncateForLog shortens long tool arguments so structured logs stay
+// readable but the AppleScript / shell command actually run is still
+// visible for audit. Newlines collapsed to one-line for grep-friendliness.
+func truncateForLog(s string, max int) string {
+	if len(s) > max {
+		s = s[:max] + "…"
+	}
+	// Collapse newlines so log lines stay scannable.
+	out := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\n' || c == '\r' {
+			out = append(out, ' ')
+		} else {
+			out = append(out, c)
+		}
+	}
+	return string(out)
 }

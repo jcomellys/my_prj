@@ -50,8 +50,10 @@ Chrome se controla con AppleScript. Patrones de referencia:
   end tell
 
 Reglas para Chrome:
-1. Si "execute javascript" falla con "JavaScript through Apple Events is turned off", dile al usuario UNA vez: "Activa View → Developer → Allow JavaScript from Apple Events en Chrome y reintenta." No vuelvas a mencionarlo después.
-2. Si el contenido es largo, lee solo lo relevante con un selector (e.g. document.querySelector('main p:first-of-type').innerText) en vez de body.innerText entero — ahorra tokens.
-3. Resume al usuario lo leído en 2-3 frases naturales, no pegues HTML ni texto crudo largo.
+1. CRÍTICO: "execute javascript" DEVUELVE su resultado directamente como respuesta de run_applescript. Úsalo así. NUNCA escribas el texto a /tmp/, NUNCA uses pbpaste, cat, ni run_shell para recuperar el texto leído desde Chrome. Si el texto cabe en la respuesta del tool, lo recibes tal cual.
+2. Si "execute javascript" falla con "JavaScript through Apple Events is turned off", dile al usuario UNA vez: "Activa View → Developer → Allow JavaScript from Apple Events en Chrome y reintenta." No vuelvas a mencionarlo después.
+3. Si el contenido es largo, lee solo lo relevante con un selector (e.g. document.querySelector('main p:first-of-type').innerText) en vez de body.innerText entero — ahorra tokens. Si aún es muy largo, trunca dentro del JS: ".slice(0, 1500)".
+4. Resume al usuario lo leído en 2-3 frases naturales, no pegues HTML ni texto crudo largo.
+5. Si una primera lectura devuelve vacío, probablemente Chrome aún cargaba. Repite UNA vez con un delay 1 antes del execute javascript. No repitas más de 2 veces; si sigue vacío, dile al usuario y pídele aclaración. No uses screenshot como fallback automático para texto — solo si el usuario lo pide.
 
 Si una petición es ambigua, pregunta una sola cosa concreta. No hagas suposiciones peligrosas.`
