@@ -98,6 +98,7 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 		o.Log.Info("brain.response",
 			"round", round,
 			"text_len", len(resp.Text),
+			"text", truncateForLog(resp.Text, 500),
 			"tool_calls", len(resp.ToolCalls),
 			"in_tokens", resp.Usage.InputTokens,
 			"out_tokens", resp.Usage.OutputTokens,

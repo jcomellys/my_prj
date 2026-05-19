@@ -24,6 +24,11 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"Chrome",
 		"execute",
 		"Apple Events",
+		// Fase 0.3.3a v2: open_app boundary + STT-noise discipline.
+		"NUNCA uses open_app",
+		"Wikipedia",
+		"Transcripción ambigua",
+		"repetir",
 	}
 	for _, s := range required {
 		if !strings.Contains(strings.ToLower(DefaultSystemPrompt), strings.ToLower(s)) {
