@@ -27,7 +27,17 @@ type VoiceConfig struct {
 }
 
 type STTConfig struct {
-	Provider string `yaml:"provider"` // stdin | whisper_cpp | macos_speech | openai_whisper
+	Provider string            `yaml:"provider"` // stdin | whisper_cpp | macos_speech | openai_whisper
+	Whisper  WhisperSTTConfig  `yaml:"whisper"`
+}
+
+type WhisperSTTConfig struct {
+	ModelPath      string  `yaml:"model_path"`       // e.g. "~/.whisper-models/ggml-small.bin"
+	Language       string  `yaml:"language"`         // "es" | "en" | "auto"
+	SilenceSeconds float64 `yaml:"silence_seconds"`  // end-of-utterance threshold; default 1.5
+	Threshold      string  `yaml:"threshold"`        // sox amplitude threshold, e.g. "3%"
+	SOXBin         string  `yaml:"sox_bin"`          // override "sox" path
+	WhisperBin     string  `yaml:"whisper_bin"`      // override "whisper-cli" path
 }
 
 type TTSConfig struct {

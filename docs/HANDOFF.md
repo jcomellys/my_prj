@@ -32,15 +32,25 @@ Honesty mandate: the user explicitly asked for "the truth and nothing but
 the truth". Do not oversell timelines. Do not claim "1 week" when the
 honest answer is "3 months for that quality". Do not skip risks.
 
-## Current state — fase 0.1 + brains expansion + tests
+## Current state — fase 0.1 verified + fase 0.2 code (pending Mac validation)
 
-The skeleton is in, plus the multi-provider promise is now real: three
-brains are implemented (OpenAI, Anthropic with prompt caching, Ollama
-for the free tier). A unit-test suite covers the orchestrator, brains,
-tools, and config (~25 tests, all passing with `-race`). It compiles
-clean for `linux/amd64` and `darwin/arm64` (`go vet` clean too).
+Fase 0.1 is verified end-to-end on the user's Mac mini M4 / macOS Tahoe
+(2026-05-19): user typed prompts, GPT-5 picked tools, Chrome opened,
+macOS spoke replies, cost tracker recorded ~$0.045 across 3 utterances.
 
-One end-to-end path works:
+Fase 0.2 (voice input) is **coded and tests pass in CI** but has not yet
+been run on the Mac. It adds `internal/stt/whisper.go` (sox → whisper.cpp
+shell-out) and `internal/activator/enter.go` (press-Enter-to-talk). The
+new `voice` profile in `config.example.yaml` wires everything. See
+`docs/FASE_02_TESTING.md` for the install/test protocol the user (or
+their on-device AI) should follow.
+
+Three brains implemented (OpenAI, Anthropic with prompt caching, Ollama
+for the free tier). Suite of unit tests covers orchestrator, brains,
+tools, config, cost, and whisper helpers (~30 tests, all passing with
+`-race`). Compiles clean for `linux/amd64` and `darwin/arm64`.
+
+One end-to-end path works (verified on Mac):
 
 ```
 user types at terminal

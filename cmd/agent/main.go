@@ -150,8 +150,29 @@ func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider,
 	switch vc.STT.Provider {
 	case "stdin", "":
 		sttImpl = stt.NewStdin()
+	case "whisper_cpp":
+		w := stt.NewWhisperCPP(stt.ExpandHome(vc.STT.Whisper.ModelPath))
+		if vc.STT.Whisper.Language != "" {
+			w.Language = vc.STT.Whisper.Language
+		}
+		if vc.STT.Whisper.SilenceSeconds > 0 {
+			w.SilenceSeconds = vc.STT.Whisper.SilenceSeconds
+		}
+		if vc.STT.Whisper.Threshold != "" {
+			w.Threshold = vc.STT.Whisper.Threshold
+		}
+		if vc.STT.Whisper.SOXBin != "" {
+			w.SOXBin = vc.STT.Whisper.SOXBin
+		}
+		if vc.STT.Whisper.WhisperBin != "" {
+			w.WhisperBin = vc.STT.Whisper.WhisperBin
+		}
+		if err := w.PreflightCheck(); err != nil {
+			return nil, fmt.Errorf("whisper preflight: %w", err)
+		}
+		sttImpl = w
 	default:
-		return nil, fmt.Errorf("stt.provider=%q not yet wired (whisper_cpp comes in fase 0.2)", vc.STT.Provider)
+		return nil, fmt.Errorf("stt.provider=%q not yet wired", vc.STT.Provider)
 	}
 
 	var ttsImpl tts.TTS
@@ -166,6 +187,8 @@ func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider,
 	switch ac.Kind {
 	case "stdin", "":
 		actImpl = activator.NewAlwaysOn()
+	case "enter":
+		actImpl = activator.NewEnter()
 	default:
 		return nil, fmt.Errorf("activator.kind=%q not yet wired (hotkey global comes in fase 0.3)", ac.Kind)
 	}

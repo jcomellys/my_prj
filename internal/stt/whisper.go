@@ -1,0 +1,235 @@
+package stt
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+// WhisperCPP captures audio from the system microphone and transcribes it
+// locally using whisper.cpp. Free of API cost, runs at faster-than-realtime
+// on Apple Silicon (Mac mini M4 with `small` model: ~5x realtime).
+//
+// Dependencies (Mac): brew install sox whisper-cpp
+// Model:              ~/.whisper-models/ggml-<size>.bin
+//   tiny:   fastest, weakest (recommend only for english quick demos)
+//   base:   small balance, ok for clear speech
+//   small:  *recommended* for production; multilingual, decent accuracy
+//   medium: better accuracy; slower; ~1.5 GB
+//
+// Recording pipeline uses `sox -d` with the silence filter:
+//   sox -d out.wav silence 1 0.1 3% 1 1.5 3%
+// meaning: start recording as soon as audio above 3% is heard; stop after
+// 1.5 s of silence at the same threshold. Adjust SilenceSeconds and
+// Threshold for noisy environments.
+type WhisperCPP struct {
+	// Binary paths. If empty, defaults are looked up on PATH.
+	SOXBin     string
+	WhisperBin string
+
+	// Required: path to a downloaded whisper.cpp model (.bin).
+	ModelPath string
+
+	// Whisper language hint. "es", "en", "auto", etc. Default "auto".
+	Language string
+
+	// Silence detection (sox `silence` filter).
+	SilenceSeconds float64 // default 1.5
+	Threshold      string  // default "3%"
+
+	// Working directory for the temporary recording WAV. Defaults to OS temp.
+	TempDir string
+
+	// VerboseEcho writes a one-line "🎤 listening..." banner when recording
+	// starts so the user knows the agent is hearing them. Default true.
+	VerboseEcho bool
+}
+
+func NewWhisperCPP(modelPath string) *WhisperCPP {
+	return &WhisperCPP{
+		ModelPath:      modelPath,
+		Language:       "auto",
+		SilenceSeconds: 1.5,
+		Threshold:      "3%",
+		VerboseEcho:    true,
+	}
+}
+
+func (w *WhisperCPP) Name() string { return "whisper_cpp" }
+
+// PreflightCheck verifies binaries and model are present. Run at agent
+// startup so the user gets a clear error before the first conversation
+// attempt rather than mid-call.
+func (w *WhisperCPP) PreflightCheck() error {
+	sox := w.soxBin()
+	if _, err := exec.LookPath(sox); err != nil {
+		return fmt.Errorf("sox binary not found (%s). Install with: brew install sox", sox)
+	}
+	wh := w.whisperBin()
+	if _, err := exec.LookPath(wh); err != nil {
+		return fmt.Errorf("whisper binary not found (%s). Install with: brew install whisper-cpp", wh)
+	}
+	if w.ModelPath == "" {
+		return errors.New("whisper model path is empty (set stt.whisper.model_path in config)")
+	}
+	if _, err := os.Stat(w.ModelPath); err != nil {
+		return fmt.Errorf("whisper model not found at %s: %w. Download from https://huggingface.co/ggerganov/whisper.cpp", w.ModelPath, err)
+	}
+	return nil
+}
+
+func (w *WhisperCPP) Listen(ctx context.Context) (string, error) {
+	wav, err := w.record(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(wav)
+
+	text, err := w.transcribe(ctx, wav)
+	if err != nil {
+		return "", err
+	}
+	return cleanTranscript(text), nil
+}
+
+// --- recording with sox ----------------------------------------------------
+
+func (w *WhisperCPP) record(ctx context.Context) (string, error) {
+	dir := w.TempDir
+	if dir == "" {
+		dir = os.TempDir()
+	}
+	f, err := os.CreateTemp(dir, "agent-rec-*.wav")
+	if err != nil {
+		return "", fmt.Errorf("temp wav: %w", err)
+	}
+	wavPath := f.Name()
+	_ = f.Close()
+
+	if w.VerboseEcho {
+		fmt.Println("🎤 escuchando...")
+	}
+
+	silenceSecs := w.SilenceSeconds
+	if silenceSecs <= 0 {
+		silenceSecs = 1.5
+	}
+	threshold := w.Threshold
+	if threshold == "" {
+		threshold = "3%"
+	}
+
+	// sox -d <out.wav> rate 16000 channels 1 silence <start> <end>
+	// Whisper.cpp expects 16kHz mono. Recording at that rate avoids a
+	// post-conversion step.
+	args := []string{
+		"-q",
+		"-d",
+		"-r", "16000",
+		"-c", "1",
+		"-b", "16",
+		wavPath,
+		"silence",
+		"1", "0.1", threshold, // start trigger
+		"1", strconv.FormatFloat(silenceSecs, 'f', 2, 64), threshold, // stop trigger
+	}
+
+	cmd := exec.CommandContext(ctx, w.soxBin(), args...)
+	cmd.Stderr = os.Stderr // surface sox errors directly
+	if err := cmd.Run(); err != nil {
+		_ = os.Remove(wavPath)
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", fmt.Errorf("sox record: %w", err)
+	}
+
+	// If the resulting file is suspiciously small, the user likely hit Enter
+	// without speaking. Treat as empty utterance.
+	if info, err := os.Stat(wavPath); err == nil && info.Size() < 4096 {
+		_ = os.Remove(wavPath)
+		return "", errSilent
+	}
+	return wavPath, nil
+}
+
+// --- transcription with whisper.cpp ----------------------------------------
+
+func (w *WhisperCPP) transcribe(ctx context.Context, wav string) (string, error) {
+	args := []string{
+		"-m", w.ModelPath,
+		"-f", wav,
+		"-l", w.langOrAuto(),
+		"-nt", // no timestamps in output
+		"-np", // no progress prints
+	}
+	cmd := exec.CommandContext(ctx, w.whisperBin(), args...)
+	out, err := cmd.Output()
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("whisper exited %d: %s", ee.ExitCode(), string(ee.Stderr))
+		}
+		return "", fmt.Errorf("whisper run: %w", err)
+	}
+	return string(out), nil
+}
+
+// --- helpers ----------------------------------------------------------------
+
+var errSilent = errors.New("no speech detected")
+
+// IsSilent reports whether the error indicates the user activated but did
+// not speak. The voice loop treats this as a non-fatal "skip this turn".
+func IsSilent(err error) bool { return errors.Is(err, errSilent) }
+
+func (w *WhisperCPP) soxBin() string {
+	if w.SOXBin != "" {
+		return w.SOXBin
+	}
+	return "sox"
+}
+
+func (w *WhisperCPP) whisperBin() string {
+	if w.WhisperBin != "" {
+		return w.WhisperBin
+	}
+	// `whisper-cli` is what Homebrew's whisper-cpp formula installs.
+	// Older docs still mention `main`; prefer the modern name.
+	return "whisper-cli"
+}
+
+func (w *WhisperCPP) langOrAuto() string {
+	if w.Language == "" {
+		return "auto"
+	}
+	return w.Language
+}
+
+// cleanTranscript strips the framing whitespace and bracketed annotations
+// whisper.cpp sometimes emits (e.g., "[BLANK_AUDIO]", "[Música]").
+func cleanTranscript(s string) string {
+	s = strings.TrimSpace(s)
+	// Drop common non-speech markers.
+	for _, marker := range []string{"[BLANK_AUDIO]", "[Música]", "[Music]", "[Silence]"} {
+		s = strings.ReplaceAll(s, marker, "")
+	}
+	return strings.TrimSpace(s)
+}
+
+// ExpandHome expands a leading "~" in p to the user's home directory.
+// Used so config files can write "~/.whisper-models/ggml-small.bin".
+func ExpandHome(p string) string {
+	if !strings.HasPrefix(p, "~") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, strings.TrimPrefix(p, "~"))
+}

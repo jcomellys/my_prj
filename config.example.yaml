@@ -56,6 +56,33 @@ profiles:
     activator:
       kind: stdin
 
+  # Tier 1c — *voice* mode (Mac mic + whisper.cpp local + GPT-5).
+  # Prerequisites on Mac:
+  #   brew install sox whisper-cpp
+  #   mkdir -p ~/.whisper-models
+  #   curl -L -o ~/.whisper-models/ggml-small.bin \
+  #     https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
+  # Grant Terminal microphone permission the first time the agent records.
+  voice:
+    voice:
+      mode: pipeline
+      stt:
+        provider: whisper_cpp
+        whisper:
+          model_path: ~/.whisper-models/ggml-small.bin
+          language: auto                # "es", "en", or "auto"
+          silence_seconds: 1.5          # stop recording after this much silence
+          threshold: "3%"               # raise to 5-10% in noisy rooms
+      tts:
+        provider: macos_say
+    brain:
+      provider: openai
+      model: gpt-5
+      temperature: 0
+      max_tokens: 4096
+    activator:
+      kind: enter                       # press Enter to start each turn
+
   # Tier 2 — premium cloud everything (default for paying users).
   premium:
     voice:

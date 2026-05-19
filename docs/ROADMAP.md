@@ -24,18 +24,25 @@ Chrome opens and the Mac speaks back.
 
 ## Fase 0.2 — Real speech-to-text
 
-- [ ] Integrate `whisper.cpp` with Metal acceleration (best free option
-      on M4).
-  - Option A: shell out to a `whisper-cli` binary the user installs via
-    Homebrew (`brew install whisper-cpp`). Simpler.
-  - Option B: link against `libwhisper` via cgo. More portable in a
-    single binary but harder.
-  - Decision: start with Option A; revisit if portability requires it.
-- [ ] Microphone capture in Go (`malgo` or `portaudio` via cgo, or
-      `cmd/say`-style native helper).
-- [ ] Silence-based end-of-turn detection.
-- [ ] `internal/stt/whisper.go` implementing `stt.STT`.
-- [ ] Update `cmd/agent/main.go` switch to wire `whisper_cpp`.
+- [x] Microphone capture via `sox -d` (shells out — keeps the Go binary
+      free of cgo audio bindings, ships portable, works on Mac out of
+      the box once `brew install sox` is done).
+- [x] Silence-based end-of-utterance detection using sox's `silence`
+      filter. Threshold and silence-seconds configurable per profile.
+- [x] `whisper.cpp` shells out to `whisper-cli` (Homebrew formula
+      `whisper-cpp`). Model `small` recommended on M4 for accuracy/speed
+      balance; user downloads it once.
+- [x] `internal/stt/whisper.go` implementing `stt.STT` with a
+      `PreflightCheck` that surfaces a helpful error at startup when sox,
+      whisper-cli, or the model file are missing.
+- [x] `internal/activator/enter.go` — Enter-to-talk activator for fase
+      0.2. Real global hotkey is fase 0.3.
+- [x] `cmd/agent/main.go` wires `whisper_cpp` and `enter`.
+- [x] New `voice` profile in `config.example.yaml` covering mic →
+      whisper.cpp → GPT-5 → macOS say end-to-end.
+- [x] `docs/FASE_02_TESTING.md` — step-by-step setup on the Mac for an
+      external AI to follow.
+- [ ] Validation on the Mac mini (pending user run).
 
 **Exit criterion:** User says "abre Chrome" out loud and the agent
 hears it. Same loop, no typing.

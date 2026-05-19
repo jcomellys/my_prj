@@ -47,6 +47,11 @@ func (p *Pipeline) Start(ctx context.Context, h Handler) error {
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
 				return nil
 			}
+			if stt.IsSilent(err) {
+				// User activated but didn't speak (or only background noise).
+				// Skip this turn without bothering the brain.
+				continue
+			}
 			return fmt.Errorf("stt: %w", err)
 		}
 		if text == "" {
