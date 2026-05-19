@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -94,7 +95,15 @@ func (w *WhisperCPP) Listen(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return cleanTranscript(text), nil
+	cleaned := cleanTranscript(text)
+	if isHallucinatedSilence(cleaned) {
+		// whisper-small commonly hallucinates [MÚSICA] / [BLANK_AUDIO]
+		// on borderline-quiet or sub-second audio. Treat as a silent
+		// turn so the orchestrator skips it instead of bothering the
+		// brain with an empty / bracketed string.
+		return "", errSilent
+	}
+	return cleaned, nil
 }
 
 // --- recording with sox ----------------------------------------------------
@@ -210,15 +219,39 @@ func (w *WhisperCPP) langOrAuto() string {
 	return w.Language
 }
 
-// cleanTranscript strips the framing whitespace and bracketed annotations
-// whisper.cpp sometimes emits (e.g., "[BLANK_AUDIO]", "[Música]").
+// nonSpeechMarker matches bracketed/parenthesized non-speech labels that
+// whisper.cpp emits when audio is silent, very short, or ambiguous —
+// across languages and capitalizations: [MÚSICA], [Música], [música],
+// [BLANK_AUDIO], [Music], [silence], [aplausos], (música), etc.
+// Anything inside [] or () that doesn't contain a letter from a normal
+// word context gets pruned. The match is greedy enough to catch the
+// hallucinations without eating real bracketed user content (rare in
+// natural speech).
+var nonSpeechMarker = regexp.MustCompile(`(?i)[\[(][^)\]]*?(música|music|silence|blank_audio|applause|aplausos|risas|laughter|ruido|noise|sonido|sound|silencio)[^)\]]*?[\])]`)
+
+// cleanTranscript removes whitespace framing and non-speech markers from
+// whisper.cpp output. If after cleaning nothing remains, the caller treats
+// the utterance as silent (errSilent) instead of forwarding empty text to
+// the brain.
 func cleanTranscript(s string) string {
 	s = strings.TrimSpace(s)
-	// Drop common non-speech markers.
-	for _, marker := range []string{"[BLANK_AUDIO]", "[Música]", "[Music]", "[Silence]"} {
-		s = strings.ReplaceAll(s, marker, "")
-	}
+	s = nonSpeechMarker.ReplaceAllString(s, "")
 	return strings.TrimSpace(s)
+}
+
+// isHallucinatedSilence returns true if the cleaned transcript is empty
+// OR consists only of stray punctuation / brackets — both signal that
+// whisper heard nothing meaningful.
+func isHallucinatedSilence(cleaned string) bool {
+	if cleaned == "" {
+		return true
+	}
+	for _, r := range cleaned {
+		if !strings.ContainsRune(" \t\n.,;:!?¡¿-—()[]{}\"'`", r) {
+			return false
+		}
+	}
+	return true
 }
 
 // ExpandHome expands a leading "~" in p to the user's home directory.

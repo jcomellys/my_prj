@@ -17,10 +17,42 @@ func TestCleanTranscript(t *testing.T) {
 		{"[Música]  hola", "hola"},
 		{"hello [Music] world", "hello  world"},
 		{"", ""},
+		// Regression: whisper-small returned this on a fase 0.2 voice test
+		// where the user said "Abre Mensajes" — was passed to the brain
+		// as-is and the brain ignored it.
+		{"[MÚSICA]", ""},
+		{"[música]", ""},
+		{"  [MÚSICA] ", ""},
+		{"abre Chrome [música]", "abre Chrome"},
+		{"[Aplausos] gracias", "gracias"},
+		{"(música)", ""},
 	}
 	for _, c := range cases {
 		if got := cleanTranscript(c.in); got != c.want {
 			t.Errorf("cleanTranscript(%q) = %q want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestIsHallucinatedSilence(t *testing.T) {
+	cases := []struct {
+		in       string
+		wantTrue bool
+	}{
+		{"", true},
+		{"   ", true},
+		{".", true},
+		{"...", true},
+		{"[ ]", true},
+		{"abre Chrome", false},
+		{"hola", false},
+		{"?", true},
+		{"¿", true},
+	}
+	for _, c := range cases {
+		got := isHallucinatedSilence(c.in)
+		if got != c.wantTrue {
+			t.Errorf("isHallucinatedSilence(%q) = %v want %v", c.in, got, c.wantTrue)
 		}
 	}
 }
