@@ -67,7 +67,10 @@ profiles:
     brain:
       provider: openai
       model: gpt-5
-      temperature: 0.3
+      # NOTE: GPT-5 y la familia o-series solo aceptan temperature default (1).
+      # El código descarta valores != 1 automáticamente para estos modelos,
+      # así que puedes dejar este campo en 0 / omitirlo sin problema.
+      temperature: 0
       max_tokens: 4096
     activator:
       kind: stdin

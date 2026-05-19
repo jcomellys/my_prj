@@ -90,6 +90,64 @@ func TestOpenAI_NoAPIKey(t *testing.T) {
 	}
 }
 
+// TestOpenAI_ReasoningModelDropsTemperature covers the fase 0.1 bug on Mac
+// where GPT-5 returned "Unsupported value: temperature does not support 0.3
+// with this model. Only the default (1) value is supported."
+func TestOpenAI_ReasoningModelDropsTemperature(t *testing.T) {
+	var sentTemp float64
+	var temperaturePresent bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Decode into a generic map so we can detect whether the field
+		// was present at all in the JSON body.
+		var raw map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&raw)
+		if v, ok := raw["temperature"]; ok {
+			temperaturePresent = true
+			if f, ok := v.(float64); ok {
+				sentTemp = f
+			}
+		}
+		_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{}}`)
+	}))
+	defer srv.Close()
+
+	cases := []struct {
+		model      string
+		userTemp   float64
+		wantSent   bool
+		wantValue  float64
+	}{
+		// GPT-5 with non-default temp: must NOT be sent.
+		{"gpt-5", 0.3, false, 0},
+		{"gpt-5-mini", 0.7, false, 0},
+		// GPT-5 with default temp (1): may be sent or omitted; we accept omit.
+		{"gpt-5", 1.0, true, 1.0},
+		// o-series: same treatment.
+		{"o3-mini", 0.5, false, 0},
+		// Non-reasoning model (e.g., a hypothetical 4-class): honor user's value.
+		{"gpt-4o", 0.3, true, 0.3},
+	}
+	for _, c := range cases {
+		sentTemp = 0
+		temperaturePresent = false
+
+		b := NewOpenAI("k", c.model)
+		b.BaseURL = srv.URL
+		b.Temperature = c.userTemp
+
+		if _, err := b.Chat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil); err != nil {
+			t.Fatalf("Chat(%s, %v): %v", c.model, c.userTemp, err)
+		}
+		if temperaturePresent != c.wantSent {
+			t.Errorf("model=%s temp=%v: present=%v want %v", c.model, c.userTemp, temperaturePresent, c.wantSent)
+		}
+		if c.wantSent && sentTemp != c.wantValue {
+			t.Errorf("model=%s: sent temp=%v want %v", c.model, sentTemp, c.wantValue)
+		}
+	}
+}
+
 func TestOpenAI_APIErrorIsSurfaced(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

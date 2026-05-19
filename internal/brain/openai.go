@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -92,16 +93,35 @@ type oaiResponse struct {
 
 // ----------------------------------------------------------------------------
 
+// isReasoningModel reports whether the model is part of OpenAI's reasoning
+// family (GPT-5 and o-series). These models reject sampling-shaping params
+// like temperature/top_p/penalties — only their defaults are accepted.
+func isReasoningModel(model string) bool {
+	m := strings.ToLower(model)
+	return strings.HasPrefix(m, "gpt-5") ||
+		strings.HasPrefix(m, "o1") ||
+		strings.HasPrefix(m, "o3") ||
+		strings.HasPrefix(m, "o4")
+}
+
 func (o *OpenAI) Chat(ctx context.Context, messages []Message, tools []ToolSpec) (*Response, error) {
 	if o.APIKey == "" {
 		return nil, fmt.Errorf("OPENAI_API_KEY not set")
+	}
+
+	// Reasoning models (GPT-5, o-series) reject temperature != 1. We honor
+	// the user's config for non-reasoning models and silently drop it for
+	// reasoning ones — the alternative is failing every call.
+	temp := o.Temperature
+	if isReasoningModel(o.Model) && temp != 0 && temp != 1 {
+		temp = 0 // 0 gets omitted by omitempty -> API uses default
 	}
 
 	body := oaiRequest{
 		Model:       o.Model,
 		Messages:    toOAIMessages(messages),
 		Tools:       toOAITools(tools),
-		Temperature: o.Temperature,
+		Temperature: temp,
 		MaxTokens:   o.MaxTokens,
 	}
 
