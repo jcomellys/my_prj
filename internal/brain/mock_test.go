@@ -57,3 +57,24 @@ func TestMock_UsesLastUserMessage(t *testing.T) {
 		t.Fatalf("expected open_app on last user message, got %+v", resp)
 	}
 }
+
+// TestMock_TerminatesAfterToolResult guards against a regression where the
+// mock would re-issue the same open_app tool call forever, causing the
+// orchestrator to hit MaxRounds and bail with "no pude completar".
+func TestMock_TerminatesAfterToolResult(t *testing.T) {
+	m := NewMock()
+	resp, err := m.Chat(context.Background(), []Message{
+		{Role: RoleUser, Content: "abre Chrome"},
+		{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "x", Name: "open_app", Arguments: `{"name":"Chrome"}`}}},
+		{Role: RoleTool, ToolCallID: "x", Name: "open_app", Content: "Opened Chrome."},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if len(resp.ToolCalls) != 0 {
+		t.Errorf("expected no further tool calls after result, got %d", len(resp.ToolCalls))
+	}
+	if !strings.Contains(resp.Text, "Opened Chrome") {
+		t.Errorf("expected text to summarize tool result, got %q", resp.Text)
+	}
+}

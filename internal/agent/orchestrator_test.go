@@ -158,6 +158,30 @@ func TestOrchestrator_MaxRoundsCap(t *testing.T) {
 	}
 }
 
+// TestOrchestrator_MockBrainOpenAppEndsCleanly reproduces the fase 0.1
+// smoke test on the Mac: user says "abre Chrome", mock brain issues the
+// open_app tool call, the tool runs, mock brain summarizes — single round,
+// no loop. Guards against a bug seen 2026-05-19 where the mock kept
+// re-issuing the same tool until MaxRounds.
+func TestOrchestrator_MockBrainOpenAppEndsCleanly(t *testing.T) {
+	reg := tools.NewRegistry()
+	probe := &programmableTool{name: "open_app", result: "Opened Chrome."}
+	reg.Register(probe)
+
+	b := brain.NewMock()
+	orch := New(nil, b, reg, "sys", quietLogger())
+	reply, err := orch.HandleUtterance(context.Background(), "abre Chrome")
+	if err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+	if probe.called != 1 {
+		t.Errorf("expected tool called exactly once, got %d", probe.called)
+	}
+	if !strings.Contains(reply, "Opened Chrome") {
+		t.Errorf("expected reply to mention tool result, got %q", reply)
+	}
+}
+
 func TestOrchestrator_RecordsCostPerBrainCall(t *testing.T) {
 	// Brain that names itself as a known-priced model.
 	type priced struct {
