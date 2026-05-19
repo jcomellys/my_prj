@@ -49,7 +49,7 @@ hears it. Same loop, no typing.
 
 ## Fase 0.3 — Real activation, browser control, screenshot
 
-- [ ] Global hotkey activator using `golang.design/x/hotkey`. macOS
+- [x] Global hotkey activator using `golang.design/x/hotkey`. macOS
       requires Accessibility permission; we document that.
 - [ ] `internal/tools/screenshot.go` returning an image to the brain.
       Use OpenAI's image input (`content` array with `image_url`).
@@ -61,6 +61,24 @@ hears it. Same loop, no typing.
       RLC, léeme el primer párrafo del primer resultado."
 
 **Exit criterion:** That sentence works without typing.
+
+## Fase 0.3.2 — Activadores físicos
+
+- [x] HotkeyActivator usando golang.design/x/hotkey con build tag darwin.
+- [x] Stub hotkey_other.go para que CI en linux compile.
+- [x] USBPresenceActivator (edge-triggered): activación al insertar
+      un USB con nombre conocido (default AGENT). Funcionamiento
+      universal (Mac/Linux), pure Go, sin CGO.
+- [x] main.go envuelve la run loop con RunWithMainThread para que
+      Cocoa pueda correr en el OS main thread (requisito de hotkey).
+- [x] Dos perfiles nuevos en config.example.yaml: manos_libres
+      (hotkey) y usb_switch (USB).
+- [ ] Validación en la Mac mini (pendiente).
+
+**Exit criterion:** El usuario presiona ⌃⌥Espacio desde Chrome (no
+desde Terminal), habla "abre Mensajes", y el agente actúa. El
+usuario inserta un USB llamado AGENT, habla, lo retira, lo reinserta,
+otra activación dispara.
 
 ## Fase 0.4 — Two-tier brain + cost tracking
 

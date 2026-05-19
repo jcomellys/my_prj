@@ -34,6 +34,12 @@ honest answer is "3 months for that quality". Do not skip risks.
 
 ## Current state — fase 0.1 verified + fase 0.2 code (pending Mac validation)
 
+Fase 0.3.2 adds two physical activators behind the existing
+`activator.Activator` interface: a macOS global hotkey profile
+(`manos_libres`, default Ctrl+Option+Space) and an edge-triggered
+USB-presence profile (`usb_switch`, default volume name `AGENT`). Code
+and automated tests are in place; Mac mini validation remains pending.
+
 Fase 0.1 is verified end-to-end on the user's Mac mini M4 / macOS Tahoe
 (2026-05-19): user typed prompts, GPT-5 picked tools, Chrome opened,
 macOS spoke replies, cost tracker recorded ~$0.045 across 3 utterances.

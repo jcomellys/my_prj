@@ -85,6 +85,52 @@ profiles:
     activator:
       kind: enter                       # press Enter to start each turn
 
+  # Tier — manos libres: hotkey global ⌃⌥Espacio + voz + GPT-5.
+  # El usuario presiona Ctrl+Option+Espacio en cualquier app,
+  # habla, y el agente actúa. Ideal para personas sin manos
+  # con un switch USB que mande esa combinación.
+  manos_libres:
+    voice:
+      mode: pipeline
+      stt:
+        provider: whisper_cpp
+        whisper:
+          model_path: ~/.whisper-models/ggml-small.bin
+          language: es
+          silence_seconds: 1.5
+          threshold: "3%"
+      tts:
+        provider: macos_say
+    brain:
+      provider: openai
+      model: gpt-5
+      temperature: 0
+      max_tokens: 4096
+    activator:
+      kind: hotkey
+      hotkey:
+        combo: "ctrl+option+space"
+
+  # Tier — USB como interruptor físico.
+  usb_switch:
+    voice:
+      mode: pipeline
+      stt:
+        provider: whisper_cpp
+        whisper:
+          model_path: ~/.whisper-models/ggml-small.bin
+          language: es
+      tts:
+        provider: macos_say
+    brain:
+      provider: openai
+      model: gpt-5
+      max_tokens: 4096
+    activator:
+      kind: usb_presence
+      usb:
+        volume_name: AGENT
+
   # Tier 2 — premium cloud everything (default for paying users).
   premium:
     voice:

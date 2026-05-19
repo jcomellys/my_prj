@@ -104,7 +104,11 @@ func main() {
 	defer cancel()
 
 	fmt.Println("Agente listo. Escribe lo que quieras decir y presiona Enter. Ctrl-C para salir.")
-	if err := orch.Run(ctx); err != nil && err != context.Canceled {
+	runErr := make(chan error, 1)
+	activator.RunWithMainThread(func() {
+		runErr <- orch.Run(ctx)
+	})
+	if err := <-runErr; err != nil && err != context.Canceled {
 		fatal(log, err)
 	}
 }
@@ -192,6 +196,18 @@ func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider,
 		actImpl = activator.NewAlwaysOn()
 	case "enter":
 		actImpl = activator.NewEnter()
+	case "hotkey":
+		hk := activator.NewHotkey(ac.Hotkey.Combo)
+		if err := hk.Register(); err != nil {
+			return nil, fmt.Errorf("hotkey: %w", err)
+		}
+		actImpl = hk
+	case "usb_presence":
+		name := ac.USB.VolumeName
+		if name == "" {
+			name = "AGENT"
+		}
+		actImpl = activator.NewUSBPresence(name)
 	default:
 		return nil, fmt.Errorf("activator.kind=%q not yet wired (hotkey global comes in fase 0.3)", ac.Kind)
 	}

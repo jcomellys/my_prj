@@ -21,23 +21,23 @@ type Profile struct {
 }
 
 type VoiceConfig struct {
-	Mode string     `yaml:"mode"` // pipeline | realtime
-	STT  STTConfig  `yaml:"stt"`
-	TTS  TTSConfig  `yaml:"tts"`
+	Mode string    `yaml:"mode"` // pipeline | realtime
+	STT  STTConfig `yaml:"stt"`
+	TTS  TTSConfig `yaml:"tts"`
 }
 
 type STTConfig struct {
-	Provider string            `yaml:"provider"` // stdin | whisper_cpp | macos_speech | openai_whisper
-	Whisper  WhisperSTTConfig  `yaml:"whisper"`
+	Provider string           `yaml:"provider"` // stdin | whisper_cpp | macos_speech | openai_whisper
+	Whisper  WhisperSTTConfig `yaml:"whisper"`
 }
 
 type WhisperSTTConfig struct {
-	ModelPath      string  `yaml:"model_path"`       // e.g. "~/.whisper-models/ggml-small.bin"
-	Language       string  `yaml:"language"`         // "es" | "en" | "auto"
-	SilenceSeconds float64 `yaml:"silence_seconds"`  // end-of-utterance threshold; default 1.5
-	Threshold      string  `yaml:"threshold"`        // sox amplitude threshold, e.g. "3%"
-	SOXBin         string  `yaml:"sox_bin"`          // override "sox" path
-	WhisperBin     string  `yaml:"whisper_bin"`      // override "whisper-cli" path
+	ModelPath      string  `yaml:"model_path"`      // e.g. "~/.whisper-models/ggml-small.bin"
+	Language       string  `yaml:"language"`        // "es" | "en" | "auto"
+	SilenceSeconds float64 `yaml:"silence_seconds"` // end-of-utterance threshold; default 1.5
+	Threshold      string  `yaml:"threshold"`       // sox amplitude threshold, e.g. "3%"
+	SOXBin         string  `yaml:"sox_bin"`         // override "sox" path
+	WhisperBin     string  `yaml:"whisper_bin"`     // override "whisper-cli" path
 }
 
 type TTSConfig struct {
@@ -54,7 +54,17 @@ type BrainConfig struct {
 }
 
 type ActivatorConfig struct {
-	Kind string `yaml:"kind"` // stdin | hotkey | wake_word | usb_presence
+	Kind   string            `yaml:"kind"` // stdin | enter | hotkey | usb_presence
+	Hotkey HotkeyConfig      `yaml:"hotkey"`
+	USB    USBPresenceConfig `yaml:"usb"`
+}
+
+type HotkeyConfig struct {
+	Combo string `yaml:"combo"` // default "ctrl+option+space"
+}
+
+type USBPresenceConfig struct {
+	VolumeName string `yaml:"volume_name"` // default "AGENT"
 }
 
 type ToolsConfig struct {
