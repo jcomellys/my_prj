@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
 	"github.com/jcomellys/voice-mac-agent/internal/osadapter"
@@ -33,15 +32,15 @@ func (OpenApp) Spec() brain.ToolSpec {
 	}
 }
 
-func (t *OpenApp) Execute(ctx context.Context, argsJSON string) (string, error) {
+func (t *OpenApp) Execute(ctx context.Context, argsJSON string) (Result, error) {
 	var args struct {
 		Name string `json:"name"`
 	}
 	if err := UnmarshalArgs(argsJSON, &args); err != nil {
-		return "", err
+		return Result{}, err
 	}
 	if err := t.OS.OpenApp(ctx, args.Name); err != nil {
-		return "", err
+		return Result{}, err
 	}
-	return fmt.Sprintf("Opened %s.", args.Name), nil
+	return Textf("Opened %s.", args.Name), nil
 }

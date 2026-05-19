@@ -61,6 +61,7 @@ type ToolsConfig struct {
 	Shell       ShellToolConfig `yaml:"shell"`
 	OpenApp     ToolEnable      `yaml:"open_app"`
 	AppleScript ToolEnable      `yaml:"applescript"`
+	Screenshot  ToolEnable      `yaml:"screenshot"`
 }
 
 type ToolEnable struct {

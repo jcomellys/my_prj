@@ -127,20 +127,22 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 			return resp.Text, nil
 		}
 
-		// Execute each tool call and append its result.
+		// Execute each tool call and append its result (including any
+		// attached images, e.g. from the screenshot tool).
 		for _, tc := range resp.ToolCalls {
-			result, err := o.runTool(ctx, tc)
+			res, err := o.runTool(ctx, tc)
 			if err != nil {
-				result = "ERROR: " + err.Error()
+				res = tools.Result{Text: "ERROR: " + err.Error()}
 				o.Log.Warn("tool.error", "tool", tc.Name, "err", err)
 			} else {
-				o.Log.Info("tool.ok", "tool", tc.Name)
+				o.Log.Info("tool.ok", "tool", tc.Name, "images", len(res.Images))
 			}
 			o.history = append(o.history, brain.Message{
 				Role:       brain.RoleTool,
 				Name:       tc.Name,
 				ToolCallID: tc.ID,
-				Content:    result,
+				Content:    res.Text,
+				Images:     res.Images,
 			})
 		}
 	}
@@ -148,10 +150,10 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 	return "Lo siento, no pude completar la tarea en un número razonable de pasos.", nil
 }
 
-func (o *Orchestrator) runTool(ctx context.Context, tc brain.ToolCall) (string, error) {
+func (o *Orchestrator) runTool(ctx context.Context, tc brain.ToolCall) (tools.Result, error) {
 	t, ok := o.Tools.Get(tc.Name)
 	if !ok {
-		return "", fmt.Errorf("unknown tool: %s", tc.Name)
+		return tools.Result{}, fmt.Errorf("unknown tool: %s", tc.Name)
 	}
 	return t.Execute(ctx, tc.Arguments)
 }

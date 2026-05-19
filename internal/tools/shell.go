@@ -41,33 +41,33 @@ func (Shell) Spec() brain.ToolSpec {
 	}
 }
 
-func (t *Shell) Execute(ctx context.Context, argsJSON string) (string, error) {
+func (t *Shell) Execute(ctx context.Context, argsJSON string) (Result, error) {
 	var args struct {
 		Command string `json:"command"`
 	}
 	if err := UnmarshalArgs(argsJSON, &args); err != nil {
-		return "", err
+		return Result{}, err
 	}
 	cmd := strings.TrimSpace(args.Command)
 	if cmd == "" {
-		return "", fmt.Errorf("empty command")
+		return Result{}, fmt.Errorf("empty command")
 	}
 	if !t.AllowUnrestricted && !t.allowed(cmd) {
-		return "", fmt.Errorf("command not on allowlist: %q", cmd)
+		return Result{}, fmt.Errorf("command not on allowlist: %q", cmd)
 	}
 	out, err := t.OS.RunShell(ctx, cmd)
 	out = strings.TrimSpace(out)
 	if err != nil {
 		if out != "" {
-			return "", fmt.Errorf("%w: %s", err, out)
+			return Result{}, fmt.Errorf("%w: %s", err, out)
 		}
-		return "", err
+		return Result{}, err
 	}
 	if len(out) > 2000 {
 		// Keep model-facing output bounded; long results burn tokens.
 		out = out[:2000] + "\n…(truncated)"
 	}
-	return out, nil
+	return Result{Text: out}, nil
 }
 
 func (t *Shell) allowed(cmd string) bool {

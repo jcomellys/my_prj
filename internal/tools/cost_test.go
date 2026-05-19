@@ -53,16 +53,16 @@ func TestShowCost_ExecuteTodayAndMonth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute today: %v", err)
 	}
-	if !strings.Contains(out, "today") || !strings.Contains(out, "0.0120") {
-		t.Errorf("expected today summary with USD, got %q", out)
+	if !strings.Contains(out.Text, "today") || !strings.Contains(out.Text, "0.0120") {
+		t.Errorf("expected today summary with USD, got %q", out.Text)
 	}
 
 	out, err = sc.Execute(context.Background(), `{"window":"month"}`)
 	if err != nil {
 		t.Fatalf("Execute month: %v", err)
 	}
-	if !strings.Contains(out, "month") {
-		t.Errorf("expected month label, got %q", out)
+	if !strings.Contains(out.Text, "month") {
+		t.Errorf("expected month label, got %q", out.Text)
 	}
 
 	_, err = sc.Execute(context.Background(), `{"window":"yesterday"}`)
@@ -77,7 +77,7 @@ func TestShowCost_NilTracker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if !strings.Contains(strings.ToLower(out), "disabled") {
-		t.Errorf("expected disabled message, got %q", out)
+	if !strings.Contains(strings.ToLower(out.Text), "disabled") {
+		t.Errorf("expected disabled message, got %q", out.Text)
 	}
 }

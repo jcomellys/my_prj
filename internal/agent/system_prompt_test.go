@@ -14,9 +14,12 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"show_cost",
 		"open_app",
 		"run_applescript",
+		"screenshot",
 		// Phrasings of the cost intent the brain should recognize.
 		"gasto",
 		"costo",
+		// Phrasing of the visual-intent the brain should recognize.
+		"pantalla",
 	}
 	for _, s := range required {
 		if !strings.Contains(strings.ToLower(DefaultSystemPrompt), strings.ToLower(s)) {

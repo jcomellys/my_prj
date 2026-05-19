@@ -116,6 +116,8 @@ tools:
     enabled: true
   applescript:
     enabled: true
+  screenshot:
+    enabled: true   # captura pantalla; pide permiso de Screen Recording la 1ª vez
 
 # Cost tracking — stored locally in cost.db (SQLite). Shown on demand.
 cost:

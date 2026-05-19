@@ -23,9 +23,23 @@ type Tool interface {
 	// Spec returns the schema the Brain uses to call this tool.
 	Spec() brain.ToolSpec
 
-	// Execute runs the tool with raw JSON arguments and returns a short
-	// result string suitable for feeding back to the Brain.
-	Execute(ctx context.Context, argsJSON string) (string, error)
+	// Execute runs the tool with raw JSON arguments and returns a Result.
+	// The Result's Text is what the Brain will read; Images are attached
+	// to the tool-result message so the Brain can see them in the next
+	// round (used by tools like screenshot).
+	Execute(ctx context.Context, argsJSON string) (Result, error)
+}
+
+// Result is what a Tool returns. Text is required (even if it's just
+// "OK"); Images are optional and attach to the tool-result message.
+type Result struct {
+	Text   string
+	Images []brain.ImageBlob
+}
+
+// Textf is a convenience constructor for tools whose result is text-only.
+func Textf(format string, args ...any) Result {
+	return Result{Text: fmt.Sprintf(format, args...)}
 }
 
 // Registry holds the set of tools available to the agent.

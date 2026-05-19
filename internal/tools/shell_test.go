@@ -55,8 +55,8 @@ func TestShell_AllowlistPermits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if out != "ok" {
-		t.Errorf("expected ok, got %q", out)
+	if out.Text != "ok" {
+		t.Errorf("expected ok, got %q", out.Text)
 	}
 	if os.gotCmd != "open https://example.com" {
 		t.Errorf("unexpected command passed to OS: %q", os.gotCmd)
@@ -82,11 +82,11 @@ func TestShell_OutputTruncated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if len(out) > 2100 {
-		t.Errorf("expected truncated output (~2000 chars), got %d", len(out))
+	if len(out.Text) > 2100 {
+		t.Errorf("expected truncated output (~2000 chars), got %d", len(out.Text))
 	}
-	if !strings.Contains(out, "truncated") {
-		t.Errorf("expected truncation marker, got %q", out[len(out)-50:])
+	if !strings.Contains(out.Text, "truncated") {
+		t.Errorf("expected truncation marker, got %q", out.Text[len(out.Text)-50:])
 	}
 }
 
@@ -110,8 +110,8 @@ func TestOpenApp_ArgsRoundTrip(t *testing.T) {
 	if os.gotCmd != "Google Chrome" {
 		t.Errorf("expected OpenApp invoked with Google Chrome, got %q", os.gotCmd)
 	}
-	if !strings.Contains(out, "Google Chrome") {
-		t.Errorf("expected app name in success message, got %q", out)
+	if !strings.Contains(out.Text, "Google Chrome") {
+		t.Errorf("expected app name in success message, got %q", out.Text)
 	}
 }
 
@@ -131,8 +131,8 @@ func TestAppleScript_PassesThrough(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if out != "Hello" {
-		t.Errorf("expected Hello, got %q", out)
+	if out.Text != "Hello" {
+		t.Errorf("expected Hello, got %q", out.Text)
 	}
 	if !strings.Contains(os.gotCmd, "return") {
 		t.Errorf("expected script forwarded to OS, got %q", os.gotCmd)
@@ -146,7 +146,7 @@ func TestAppleScript_EmptyOutputBecomesOK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if out != "OK" {
-		t.Errorf("expected OK fallback, got %q", out)
+	if out.Text != "OK" {
+		t.Errorf("expected OK fallback, got %q", out.Text)
 	}
 }

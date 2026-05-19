@@ -3,6 +3,7 @@ package brain
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -66,7 +67,17 @@ type antContentBlock struct {
 	Name      string         `json:"name,omitempty"`
 	Input     map[string]any `json:"input,omitempty"`
 	ToolUseID string         `json:"tool_use_id,omitempty"`
-	Content   string         `json:"content,omitempty"`
+	// Content can be either a plain string OR an array of inner blocks
+	// (e.g., for tool_result that includes an image). We use any to let
+	// json/Marshal pick the right shape.
+	Content any           `json:"content,omitempty"`
+	Source  *antImageSrc  `json:"source,omitempty"`
+}
+
+type antImageSrc struct {
+	Type      string `json:"type"`       // "base64"
+	MediaType string `json:"media_type"` // "image/png" / "image/jpeg"
+	Data      string `json:"data"`       // base64-encoded
 }
 
 type antMessage struct {
@@ -233,10 +244,14 @@ func toAntMessages(in []Message) []antMessage {
 	for _, m := range in {
 		switch m.Role {
 		case RoleUser:
-			out = append(out, antMessage{
-				Role:    "user",
-				Content: []antContentBlock{{Type: "text", Text: m.Content}},
-			})
+			blocks := []antContentBlock{}
+			if m.Content != "" {
+				blocks = append(blocks, antContentBlock{Type: "text", Text: m.Content})
+			}
+			for _, img := range m.Images {
+				blocks = append(blocks, imageBlock(img))
+			}
+			out = append(out, antMessage{Role: "user", Content: blocks})
 		case RoleAssistant:
 			blocks := []antContentBlock{}
 			if m.Content != "" {
@@ -256,15 +271,41 @@ func toAntMessages(in []Message) []antMessage {
 		case RoleTool:
 			// Anthropic represents tool results as a user message with a
 			// tool_result content block referencing the prior tool_use id.
-			out = append(out, antMessage{
-				Role: "user",
-				Content: []antContentBlock{{
-					Type:      "tool_result",
-					ToolUseID: m.ToolCallID,
-					Content:   m.Content,
-				}},
-			})
+			// If the tool attached images, the tool_result's content
+			// becomes an array of inner blocks (text + image).
+			tr := antContentBlock{
+				Type:      "tool_result",
+				ToolUseID: m.ToolCallID,
+			}
+			if len(m.Images) > 0 {
+				inner := []antContentBlock{}
+				if m.Content != "" {
+					inner = append(inner, antContentBlock{Type: "text", Text: m.Content})
+				}
+				for _, img := range m.Images {
+					inner = append(inner, imageBlock(img))
+				}
+				tr.Content = inner
+			} else {
+				tr.Content = m.Content
+			}
+			out = append(out, antMessage{Role: "user", Content: []antContentBlock{tr}})
 		}
 	}
 	return out
+}
+
+func imageBlock(img ImageBlob) antContentBlock {
+	mt := img.MediaType
+	if mt == "" {
+		mt = "image/png"
+	}
+	return antContentBlock{
+		Type: "image",
+		Source: &antImageSrc{
+			Type:      "base64",
+			MediaType: mt,
+			Data:      base64.StdEncoding.EncodeToString(img.Data),
+		},
+	}
 }

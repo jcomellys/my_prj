@@ -3,6 +3,7 @@ package brain
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -57,12 +58,25 @@ type oaiToolCall struct {
 	} `json:"function"`
 }
 
+// oaiMessage carries either a plain string content (text-only) or a
+// structured content array (when images are present). We use any to allow
+// both shapes through the same struct without an explicit union type.
 type oaiMessage struct {
 	Role       string        `json:"role"`
-	Content    string        `json:"content,omitempty"`
+	Content    any           `json:"content,omitempty"`
 	ToolCalls  []oaiToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string        `json:"tool_call_id,omitempty"`
 	Name       string        `json:"name,omitempty"`
+}
+
+type oaiContentPart struct {
+	Type     string       `json:"type"`
+	Text     string       `json:"text,omitempty"`
+	ImageURL *oaiImageURL `json:"image_url,omitempty"`
+}
+
+type oaiImageURL struct {
+	URL string `json:"url"`
 }
 
 type oaiRequest struct {
@@ -157,7 +171,7 @@ func (o *OpenAI) Chat(ctx context.Context, messages []Message, tools []ToolSpec)
 
 	msg := out.Choices[0].Message
 	r := &Response{
-		Text: msg.Content,
+		Text: oaiContentToText(msg.Content),
 		Usage: Usage{
 			InputTokens:       out.Usage.PromptTokens,
 			OutputTokens:      out.Usage.CompletionTokens,
@@ -179,9 +193,26 @@ func toOAIMessages(in []Message) []oaiMessage {
 	for _, m := range in {
 		om := oaiMessage{
 			Role:       string(m.Role),
-			Content:    m.Content,
 			ToolCallID: m.ToolCallID,
 			Name:       m.Name,
+		}
+		// Content shape depends on whether images are attached. Plain text
+		// stays as a string (cheaper / simpler); an array of parts is used
+		// when there's at least one image.
+		if len(m.Images) > 0 {
+			parts := []oaiContentPart{}
+			if m.Content != "" {
+				parts = append(parts, oaiContentPart{Type: "text", Text: m.Content})
+			}
+			for _, img := range m.Images {
+				parts = append(parts, oaiContentPart{
+					Type:     "image_url",
+					ImageURL: &oaiImageURL{URL: dataURL(img)},
+				})
+			}
+			om.Content = parts
+		} else if m.Content != "" {
+			om.Content = m.Content
 		}
 		for _, tc := range m.ToolCalls {
 			om.ToolCalls = append(om.ToolCalls, oaiToolCall{
@@ -196,6 +227,41 @@ func toOAIMessages(in []Message) []oaiMessage {
 		out = append(out, om)
 	}
 	return out
+}
+
+// dataURL encodes an ImageBlob as a data: URL so OpenAI's image_url field
+// can carry it inline (no separate upload needed). Format:
+//   data:<mediaType>;base64,<b64data>
+func dataURL(img ImageBlob) string {
+	mt := img.MediaType
+	if mt == "" {
+		mt = "image/png"
+	}
+	return "data:" + mt + ";base64," + base64.StdEncoding.EncodeToString(img.Data)
+}
+
+// oaiContentToText extracts the text portion of an OpenAI message Content,
+// which may be a plain string (typical for assistant turns) or an array of
+// content parts (rare for assistant output but allowed by the schema).
+func oaiContentToText(c any) string {
+	switch v := c.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case []any:
+		var out string
+		for _, p := range v {
+			if m, ok := p.(map[string]any); ok {
+				if t, _ := m["text"].(string); t != "" {
+					out += t
+				}
+			}
+		}
+		return out
+	default:
+		return ""
+	}
 }
 
 func toOAITools(in []ToolSpec) []oaiTool {

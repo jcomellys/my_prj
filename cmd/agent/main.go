@@ -78,6 +78,9 @@ func main() {
 	if cfg.Tools.Shell.Enabled {
 		registry.Register(tools.NewShell(osa, cfg.Tools.Shell.AllowUnrestricted, cfg.Tools.Shell.Allowlist))
 	}
+	if cfg.Tools.Screenshot.Enabled {
+		registry.Register(tools.NewScreenshot())
+	}
 	if tracker != nil {
 		registry.Register(tools.NewShowCost(tracker))
 	}

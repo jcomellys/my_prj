@@ -39,15 +39,15 @@ func (ShowCost) Spec() brain.ToolSpec {
 	}
 }
 
-func (t *ShowCost) Execute(ctx context.Context, argsJSON string) (string, error) {
+func (t *ShowCost) Execute(ctx context.Context, argsJSON string) (Result, error) {
 	if t.Tracker == nil {
-		return "Cost tracking is disabled.", nil
+		return Result{Text: "Cost tracking is disabled."}, nil
 	}
 	var args struct {
 		Window string `json:"window"`
 	}
 	if err := UnmarshalArgs(argsJSON, &args); err != nil {
-		return "", err
+		return Result{}, err
 	}
 
 	var (
@@ -60,11 +60,11 @@ func (t *ShowCost) Execute(ctx context.Context, argsJSON string) (string, error)
 	case "month":
 		s, err = t.Tracker.Month()
 	default:
-		return "", fmt.Errorf("invalid window %q (use today or month)", args.Window)
+		return Result{}, fmt.Errorf("invalid window %q (use today or month)", args.Window)
 	}
 	if err != nil {
-		return "", err
+		return Result{}, err
 	}
-	return fmt.Sprintf("%s: %d calls, %d input tokens (%d cached), %d output tokens, $%.4f.",
+	return Textf("%s: %d calls, %d input tokens (%d cached), %d output tokens, $%.4f.",
 		args.Window, s.Entries, s.InputTokens, s.CachedTokens, s.OutputTokens, s.USD), nil
 }

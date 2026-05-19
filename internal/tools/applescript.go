@@ -35,23 +35,23 @@ func (AppleScript) Spec() brain.ToolSpec {
 	}
 }
 
-func (t *AppleScript) Execute(ctx context.Context, argsJSON string) (string, error) {
+func (t *AppleScript) Execute(ctx context.Context, argsJSON string) (Result, error) {
 	var args struct {
 		Script string `json:"script"`
 	}
 	if err := UnmarshalArgs(argsJSON, &args); err != nil {
-		return "", err
+		return Result{}, err
 	}
 	out, err := t.OS.RunAppleScript(ctx, args.Script)
 	out = strings.TrimSpace(out)
 	if err != nil {
-		return "", err
+		return Result{}, err
 	}
 	if out == "" {
-		return "OK", nil
+		return Result{Text: "OK"}, nil
 	}
 	if len(out) > 2000 {
 		out = out[:2000] + "\n…(truncated)"
 	}
-	return out, nil
+	return Result{Text: out}, nil
 }

@@ -51,9 +51,9 @@ func (p *programmableTool) Spec() brain.ToolSpec {
 	}
 }
 
-func (p *programmableTool) Execute(_ context.Context, _ string) (string, error) {
+func (p *programmableTool) Execute(_ context.Context, _ string) (tools.Result, error) {
 	p.called++
-	return p.result, p.err
+	return tools.Result{Text: p.result}, p.err
 }
 
 func quietLogger() *slog.Logger {

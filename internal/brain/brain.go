@@ -19,11 +19,20 @@ const (
 
 // Message is one turn of the conversation.
 type Message struct {
-	Role       Role       `json:"role"`
-	Content    string     `json:"content,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`  // assistant turns may have these
-	ToolCallID string     `json:"tool_call_id,omitempty"` // for role=tool, the id this answers
-	Name       string     `json:"name,omitempty"`         // for role=tool, the tool name
+	Role       Role        `json:"role"`
+	Content    string      `json:"content,omitempty"`
+	Images     []ImageBlob `json:"-"` // images attached to this message (encoded per-provider)
+	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`   // assistant turns may have these
+	ToolCallID string      `json:"tool_call_id,omitempty"` // for role=tool, the id this answers
+	Name       string      `json:"name,omitempty"`         // for role=tool, the tool name
+}
+
+// ImageBlob is raw image data attached to a Message. Each brain provider
+// encodes it to the appropriate request shape (OpenAI: image_url with
+// data:..;base64,... ; Anthropic: image content block with base64 source).
+type ImageBlob struct {
+	MediaType string // "image/png", "image/jpeg"
+	Data      []byte // raw bytes (NOT base64-encoded)
 }
 
 // ToolSpec describes a tool the model may call. Schema is a JSON Schema object.
