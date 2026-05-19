@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"golang.design/x/hotkey"
-	"golang.design/x/mainthread"
+	"golang.design/x/hotkey/mainthread"
 )
 
 // Hotkey is a global system hotkey activator. On macOS this uses
@@ -17,8 +17,8 @@ import (
 // records one voice turn.
 //
 // Important macOS quirk: the hotkey library MUST run on the main OS
-// thread (Cocoa requirement). We use golang.design/x/mainthread for
-// that. Because of this, main.go imports a helper to wrap main().
+// thread (Cocoa requirement). We use golang.design/x/hotkey/mainthread
+// for that. Because of this, main.go imports a helper to wrap main().
 type Hotkey struct {
 	// Combo is the textual representation, e.g. "ctrl+option+space".
 	// Parsed in Register().

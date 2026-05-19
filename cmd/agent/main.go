@@ -197,11 +197,10 @@ func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider,
 	case "enter":
 		actImpl = activator.NewEnter()
 	case "hotkey":
-		hk := activator.NewHotkey(ac.Hotkey.Combo)
-		if err := hk.Register(); err != nil {
-			return nil, fmt.Errorf("hotkey: %w", err)
-		}
-		actImpl = hk
+		// Hotkey registration touches Cocoa on macOS, so it must happen
+		// inside RunWithMainThread. Hotkey.WaitForActivation registers
+		// lazily on the first turn, after the orchestrator is on that thread.
+		actImpl = activator.NewHotkey(ac.Hotkey.Combo)
 	case "usb_presence":
 		name := ac.USB.VolumeName
 		if name == "" {
