@@ -85,6 +85,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 // Loop: append user msg -> Brain -> if tool calls, execute and feed back -> repeat.
 // Stops when the Brain returns text and no tool calls (final reply for the user).
 func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (string, error) {
+	o.Log.Info("user.utterance", "text", userText)
 	o.history = append(o.history, brain.Message{Role: brain.RoleUser, Content: userText})
 	specs := o.Tools.Specs()
 

@@ -58,6 +58,12 @@ func (p *Pipeline) Start(ctx context.Context, h Handler) error {
 			continue
 		}
 
+		// Surface the transcribed utterance so the user (and any reviewing
+		// AI) can verify what the STT actually heard. Without this the only
+		// signal is whether the brain did the right thing, which makes
+		// debugging "the agent ignored me" cases nearly impossible.
+		fmt.Printf("you> %s\n", text)
+
 		// Run the brain + tool rounds.
 		reply, err := h.HandleUtterance(ctx, text)
 		if err != nil {

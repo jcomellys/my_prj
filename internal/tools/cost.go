@@ -19,14 +19,18 @@ func NewShowCost(t *cost.Tracker) *ShowCost { return &ShowCost{Tracker: t} }
 
 func (ShowCost) Spec() brain.ToolSpec {
 	return brain.ToolSpec{
-		Name:        "show_cost",
-		Description: "Returns the user's API cost summary for the chosen window. Use when the user asks how much they have spent. Window must be 'today' or 'month'.",
+		Name: "show_cost",
+		Description: "Returns how much money the user has spent using this voice agent (cumulative API usage cost). " +
+			"Call this whenever the user asks about cost, spending, consumption, budget, or how much they have used — in any language and any phrasing. " +
+			"Examples that should trigger this tool: \"cuánto llevo gastado hoy\", \"cuánto he gastado este mes\", \"how much have I spent\", " +
+			"\"my usage\", \"cuánto consumí\", \"qué he gastado\". Window must be 'today' or 'month'.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"window": map[string]any{
-					"type": "string",
-					"enum": []string{"today", "month"},
+					"type":        "string",
+					"description": "Time window. 'today' = since 00:00 today. 'month' = since the 1st of this month.",
+					"enum":        []string{"today", "month"},
 				},
 			},
 			"required":             []string{"window"},

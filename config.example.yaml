@@ -70,7 +70,9 @@ profiles:
         provider: whisper_cpp
         whisper:
           model_path: ~/.whisper-models/ggml-small.bin
-          language: auto                # "es", "en", or "auto"
+          # IMPORTANT: fija explícitamente el idioma. `auto` se equivoca con
+          # frases cortas (<5 s). Cámbialo a "en" si tu idioma es inglés.
+          language: es
           silence_seconds: 1.5          # stop recording after this much silence
           threshold: "3%"               # raise to 5-10% in noisy rooms
       tts:
