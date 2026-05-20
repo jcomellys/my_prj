@@ -16,6 +16,7 @@ import (
 
 	"github.com/jcomellys/voice-mac-agent/internal/activator"
 	"github.com/jcomellys/voice-mac-agent/internal/agent"
+	"github.com/jcomellys/voice-mac-agent/internal/audiocue"
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
 	"github.com/jcomellys/voice-mac-agent/internal/cost"
 	"github.com/jcomellys/voice-mac-agent/internal/osadapter"
@@ -226,7 +227,14 @@ func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider,
 		return nil, fmt.Errorf("activator.kind=%q not yet wired (hotkey global comes in fase 0.3)", ac.Kind)
 	}
 
-	return voice.NewPipeline(sttImpl, ttsImpl, actImpl), nil
+	// Audible earcons (accessibility). Default ON unless explicitly disabled.
+	cuesOn := true
+	if vc.Cues.Enabled != nil {
+		cuesOn = *vc.Cues.Enabled
+	}
+	cues := audiocue.New(cuesOn, vc.Cues.ListeningSound, vc.Cues.CapturedSound)
+
+	return voice.NewPipeline(sttImpl, ttsImpl, actImpl).WithCues(cues), nil
 }
 
 // loadDotEnv parses a minimal KEY=VALUE .env file (no quotes/escapes) and

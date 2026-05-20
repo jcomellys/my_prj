@@ -124,6 +124,13 @@ profiles:
       model: gpt-5
       temperature: 0
       max_tokens: 4096
+      # Earcons de accesibilidad: sonido al abrir y al cerrar el micrófono.
+      # Encendidos por defecto. Imprescindibles para usuarios que no ven la
+      # pantalla: marcan "habla ahora" y "te escuché, procesando".
+      cues:
+        enabled: true
+        listening_sound: /System/Library/Sounds/Tink.aiff
+        captured_sound: /System/Library/Sounds/Pop.aiff
     activator:
       kind: hotkey
       hotkey:

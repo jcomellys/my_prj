@@ -21,9 +21,19 @@ type Profile struct {
 }
 
 type VoiceConfig struct {
-	Mode string    `yaml:"mode"` // pipeline | realtime
-	STT  STTConfig `yaml:"stt"`
-	TTS  TTSConfig `yaml:"tts"`
+	Mode string     `yaml:"mode"` // pipeline | realtime
+	STT  STTConfig  `yaml:"stt"`
+	TTS  TTSConfig  `yaml:"tts"`
+	Cues CuesConfig `yaml:"cues"`
+}
+
+// CuesConfig controls the audible earcons that tell the user when the mic
+// opens and closes. Accessibility-critical, so cues default to ON when
+// Enabled is omitted (nil). Set enabled: false to silence them.
+type CuesConfig struct {
+	Enabled        *bool  `yaml:"enabled"`         // nil => default on
+	ListeningSound string `yaml:"listening_sound"` // path to "mic open" sound
+	CapturedSound  string `yaml:"captured_sound"`  // path to "mic closed" sound
 }
 
 type STTConfig struct {

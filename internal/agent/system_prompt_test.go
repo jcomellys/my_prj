@@ -29,6 +29,8 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"Wikipedia",
 		"Transcripción ambigua",
 		"repetir",
+		// Time should resolve via AppleScript, not run_shell.
+		"current date",
 	}
 	for _, s := range required {
 		if !strings.Contains(strings.ToLower(DefaultSystemPrompt), strings.ToLower(s)) {

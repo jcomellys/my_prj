@@ -11,16 +11,37 @@ import (
 	"github.com/jcomellys/voice-mac-agent/internal/tts"
 )
 
+// Cues plays audible state-transition earcons. Defined as an interface here
+// so the voice package stays decoupled from any concrete audio backend.
+type Cues interface {
+	Listening() // mic is open, user should speak now
+	Captured()  // mic closed, speech captured, processing
+}
+
+type noopCues struct{}
+
+func (noopCues) Listening() {}
+func (noopCues) Captured()  {}
+
 // Pipeline is the cheap, modular voice provider: STT -> Brain -> TTS.
 // Each component is swappable; the orchestrator does not know or care.
 type Pipeline struct {
 	STT       stt.STT
 	TTS       tts.TTS
 	Activator activator.Activator
+	Cues      Cues
 }
 
 func NewPipeline(s stt.STT, t tts.TTS, a activator.Activator) *Pipeline {
-	return &Pipeline{STT: s, TTS: t, Activator: a}
+	return &Pipeline{STT: s, TTS: t, Activator: a, Cues: noopCues{}}
+}
+
+// WithCues attaches an earcon player. Passing nil keeps the no-op default.
+func (p *Pipeline) WithCues(c Cues) *Pipeline {
+	if c != nil {
+		p.Cues = c
+	}
+	return p
 }
 
 func (p *Pipeline) Name() string {
@@ -41,8 +62,17 @@ func (p *Pipeline) Start(ctx context.Context, h Handler) error {
 			return fmt.Errorf("activator: %w", err)
 		}
 
+		// Earcon: mic is opening. Blocks until the tone finishes so it does
+		// not bleed into the recording. Tells a non-sighted user "speak now".
+		p.Cues.Listening()
+
 		// Listen for one user utterance.
 		text, err := p.STT.Listen(ctx)
+
+		// Earcon: mic closed regardless of outcome — the user must know the
+		// listening window ended, even if nothing was captured.
+		p.Cues.Captured()
+
 		if err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
 				return nil
