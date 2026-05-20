@@ -78,6 +78,7 @@ profiles:
           min_duration_seconds: 0.30    # skip clips too short to be trusted
           leading_pad_seconds: 0.50     # helps Whisper keep the first word
           trailing_pad_seconds: 0.20
+          max_listen_seconds: 10        # si activas y no hablas, se cierra solo
           initial_prompt: >
             Vocabulario frecuente para comandos de Mac en español. Verbos:
             abre, busca, léeme, lee, cierra, navega, escribe, describe.
@@ -86,6 +87,10 @@ profiles:
             hora, gasto.
       tts:
         provider: macos_say
+      cues:
+        enabled: true
+        listening_sound: /System/Library/Sounds/Tink.aiff
+        captured_sound: /System/Library/Sounds/Pop.aiff
     brain:
       provider: openai
       model: gpt-5
@@ -111,6 +116,7 @@ profiles:
           min_duration_seconds: 0.30
           leading_pad_seconds: 0.50
           trailing_pad_seconds: 0.20
+          max_listen_seconds: 10        # si activas y no hablas, se cierra solo
           initial_prompt: >
             Vocabulario frecuente para comandos de Mac en español. Verbos:
             abre, busca, léeme, lee, cierra, navega, escribe, describe.
@@ -119,11 +125,6 @@ profiles:
             hora, gasto.
       tts:
         provider: macos_say
-    brain:
-      provider: openai
-      model: gpt-5
-      temperature: 0
-      max_tokens: 4096
       # Earcons de accesibilidad: sonido al abrir y al cerrar el micrófono.
       # Encendidos por defecto. Imprescindibles para usuarios que no ven la
       # pantalla: marcan "habla ahora" y "te escuché, procesando".
@@ -131,6 +132,11 @@ profiles:
         enabled: true
         listening_sound: /System/Library/Sounds/Tink.aiff
         captured_sound: /System/Library/Sounds/Pop.aiff
+    brain:
+      provider: openai
+      model: gpt-5
+      temperature: 0
+      max_tokens: 4096
     activator:
       kind: hotkey
       hotkey:

@@ -46,6 +46,7 @@ type WhisperSTTConfig struct {
 	Language           string   `yaml:"language"`             // "es" | "en" | "auto"
 	SilenceSeconds     float64  `yaml:"silence_seconds"`      // end-of-utterance threshold; default 1.5
 	Threshold          string   `yaml:"threshold"`            // sox amplitude threshold, e.g. "3%"
+	MaxListenSeconds   float64  `yaml:"max_listen_seconds"`   // cap wait for speech; default 10, 0 keeps default
 	MinDurationSeconds *float64 `yaml:"min_duration_seconds"` // reject shorter clips before whisper
 	LeadingPadSeconds  *float64 `yaml:"leading_pad_seconds"`  // silence prepended before whisper
 	TrailingPadSeconds *float64 `yaml:"trailing_pad_seconds"` // silence appended before whisper

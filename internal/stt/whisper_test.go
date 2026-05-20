@@ -9,7 +9,53 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
+
+// TestWhisperCPP_ListenTimesOutWhenNoSpeech reproduces the accessibility bug
+// Codex found live: activating the mic without speaking left sox blocked
+// indefinitely. With MaxListenSeconds the listen must return ErrSilent
+// promptly and never reach whisper.
+func TestWhisperCPP_ListenTimesOutWhenNoSpeech(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fake not implemented for windows")
+	}
+	dir := t.TempDir()
+	sox := filepath.Join(dir, "sox")
+	whisper := filepath.Join(dir, "whisper")
+	whisperCalled := filepath.Join(dir, "whisper-called")
+
+	// sox that blocks well past the timeout, simulating "waiting for speech
+	// that never comes".
+	writeScript(t, sox, "#!/bin/sh\nsleep 5\n")
+	writeScript(t, whisper, fmt.Sprintf("#!/bin/sh\ntouch %q\necho hola\n", whisperCalled))
+
+	w := NewWhisperCPP("/tmp/model.bin")
+	w.SOXBin = sox
+	w.WhisperBin = whisper
+	w.VerboseEcho = false
+	w.MinDurationSeconds = 0 // isolate timeout behavior
+	w.LeadingPadSeconds = 0
+	w.TrailingPadSeconds = 0
+	w.MaxListenSeconds = 0.3
+
+	start := time.Now()
+	got, err := w.Listen(context.Background())
+	elapsed := time.Since(start)
+
+	if !IsSilent(err) {
+		t.Fatalf("Listen() err = %v, want ErrSilent", err)
+	}
+	if got != "" {
+		t.Fatalf("Listen() text = %q, want empty", got)
+	}
+	if elapsed > 3*time.Second {
+		t.Fatalf("Listen() took %v; timeout did not fire", elapsed)
+	}
+	if _, err := os.Stat(whisperCalled); !os.IsNotExist(err) {
+		t.Fatal("whisper must not run when the listen window times out")
+	}
+}
 
 func TestCleanTranscript(t *testing.T) {
 	cases := []struct {
@@ -76,8 +122,8 @@ func TestExpandHome(t *testing.T) {
 }
 
 func TestIsSilent(t *testing.T) {
-	if !IsSilent(errSilent) {
-		t.Error("expected IsSilent(errSilent) to be true")
+	if !IsSilent(ErrSilent) {
+		t.Error("expected IsSilent(ErrSilent) to be true")
 	}
 	if IsSilent(nil) {
 		t.Error("IsSilent(nil) should be false")

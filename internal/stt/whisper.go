@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // WhisperCPP captures audio from the system microphone and transcribes it
@@ -48,6 +49,13 @@ type WhisperCPP struct {
 	SilenceSeconds float64 // default 1.5
 	Threshold      string  // default "3%"
 
+	// MaxListenSeconds caps how long we wait for the user to speak. Without
+	// it, sox's silence filter blocks indefinitely when the mic is activated
+	// but no speech follows (accidental hotkey / physical switch). On
+	// timeout, Listen returns ErrSilent so the turn is skipped and the user
+	// hears the "mic closed" cue. Default 10.
+	MaxListenSeconds float64
+
 	// Short-clip defense and transcription conditioning.
 	MinDurationSeconds float64 // default 0.30; clips below this are silence/noise
 	LeadingPadSeconds  float64 // default 0.50; prepended before whisper
@@ -72,6 +80,7 @@ func NewWhisperCPP(modelPath string) *WhisperCPP {
 		MinDurationSeconds: 0.30,
 		LeadingPadSeconds:  0.50,
 		TrailingPadSeconds: 0.20,
+		MaxListenSeconds:   10,
 		VerboseEcho:        true,
 	}
 }
@@ -107,7 +116,7 @@ func (w *WhisperCPP) Listen(ctx context.Context) (string, error) {
 	defer os.Remove(wav)
 
 	if w.tooShort(wav) {
-		return "", errSilent
+		return "", ErrSilent
 	}
 
 	transcriptionWav := wav
@@ -130,7 +139,7 @@ func (w *WhisperCPP) Listen(ctx context.Context) (string, error) {
 		// on borderline-quiet or sub-second audio. Treat as a silent
 		// turn so the orchestrator skips it instead of bothering the
 		// brain with an empty / bracketed string.
-		return "", errSilent
+		return "", ErrSilent
 	}
 	return cleaned, nil
 }
@@ -177,21 +186,36 @@ func (w *WhisperCPP) record(ctx context.Context) (string, error) {
 		"1", strconv.FormatFloat(silenceSecs, 'f', 2, 64), threshold, // stop trigger
 	}
 
-	cmd := exec.CommandContext(ctx, w.soxBin(), args...)
+	// Cap the wait so an activation with no speech can't block forever.
+	// sox's silence filter blocks until audio crosses the threshold; with
+	// no timeout, an accidental hotkey press leaves the user stuck.
+	recordCtx := ctx
+	if w.MaxListenSeconds > 0 {
+		var cancel context.CancelFunc
+		recordCtx, cancel = context.WithTimeout(ctx, time.Duration(w.MaxListenSeconds*float64(time.Second)))
+		defer cancel()
+	}
+
+	cmd := exec.CommandContext(recordCtx, w.soxBin(), args...)
 	cmd.Stderr = os.Stderr // surface sox errors directly
 	if err := cmd.Run(); err != nil {
 		_ = os.Remove(wavPath)
+		// A real parent cancellation (Ctrl-C) propagates as-is.
 		if ctx.Err() != nil {
 			return "", ctx.Err()
+		}
+		// Our listen timeout firing means the user never spoke in time.
+		if recordCtx.Err() == context.DeadlineExceeded {
+			return "", ErrSilent
 		}
 		return "", fmt.Errorf("sox record: %w", err)
 	}
 
-	// If the resulting file is suspiciously small, the user likely hit Enter
+	// If the resulting file is suspiciously small, the user likely activated
 	// without speaking. Treat as empty utterance.
 	if info, err := os.Stat(wavPath); err == nil && info.Size() < 4096 {
 		_ = os.Remove(wavPath)
-		return "", errSilent
+		return "", ErrSilent
 	}
 	return wavPath, nil
 }
@@ -266,11 +290,15 @@ func (w *WhisperCPP) transcribe(ctx context.Context, wav string) (string, error)
 
 // --- helpers ----------------------------------------------------------------
 
-var errSilent = errors.New("no speech detected")
+// ErrSilent signals the user activated the agent but no speech was captured
+// (silence, noise, a too-short clip, or the listen timeout firing). The
+// voice loop treats it as a non-fatal "skip this turn". Exported so other
+// STT providers and the voice package can produce/recognize it.
+var ErrSilent = errors.New("no speech detected")
 
 // IsSilent reports whether the error indicates the user activated but did
 // not speak. The voice loop treats this as a non-fatal "skip this turn".
-func IsSilent(err error) bool { return errors.Is(err, errSilent) }
+func IsSilent(err error) bool { return errors.Is(err, ErrSilent) }
 
 func (w *WhisperCPP) soxBin() string {
 	if w.SOXBin != "" {
@@ -326,7 +354,7 @@ var nonSpeechMarker = regexp.MustCompile(`(?i)[\[(][^)\]]*?(música|music|silenc
 
 // cleanTranscript removes whitespace framing and non-speech markers from
 // whisper.cpp output. If after cleaning nothing remains, the caller treats
-// the utterance as silent (errSilent) instead of forwarding empty text to
+// the utterance as silent (ErrSilent) instead of forwarding empty text to
 // the brain.
 func cleanTranscript(s string) string {
 	s = strings.TrimSpace(s)

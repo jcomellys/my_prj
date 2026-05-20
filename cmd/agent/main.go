@@ -169,6 +169,9 @@ func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider,
 		if vc.STT.Whisper.Threshold != "" {
 			w.Threshold = vc.STT.Whisper.Threshold
 		}
+		if vc.STT.Whisper.MaxListenSeconds > 0 {
+			w.MaxListenSeconds = vc.STT.Whisper.MaxListenSeconds
+		}
 		if vc.STT.Whisper.MinDurationSeconds != nil {
 			w.MinDurationSeconds = *vc.STT.Whisper.MinDurationSeconds
 		}
