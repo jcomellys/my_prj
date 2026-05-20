@@ -4,6 +4,25 @@ Phases are ordered so each one produces something working end-to-end and
 testable on the user's Mac mini before moving on. No phase is "skeleton
 code only" — every phase ends with a real user-visible behaviour.
 
+## Fase activation-feedback-UX  ✅ DONE (validated live, 2026-05-20)
+
+- [x] Earcons: Tink when the mic opens, Pop when it closes. Default ON
+      (accessibility). Validated live: both tones audible, open-cue does
+      not bleed into the recording.
+- [x] Listen timeout (max_listen_seconds, default 10): an activation with
+      no speech self-closes (~10s) instead of hanging indefinitely. This
+      was a real accessibility hole found by Codex's live test.
+- [x] "qué hora es" resolves via run_applescript current date, not the
+      blocked run_shell date.
+- [x] medium promoted as the manos_libres STT default (A/B 10/10 vs 7/10
+      on proper nouns; ~1.5s latency on M4).
+- [x] Committed regression test loads config.example.yaml and asserts
+      cues live under voice: and every voice profile caps the listen
+      window (guards the mis-nesting bug from recurring).
+- Open non-blocker: medium still occasionally degrades "qué hora es" to
+  "y hora."; the brain handles it without run_shell. Revisit if STT
+  accuracy on short phrases becomes a complaint (cloud STT for premium).
+
 ## Fase 0.1 — Skeleton with one real path  ✅ DONE
 
 - [x] Go module + Makefile.

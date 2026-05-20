@@ -7,6 +7,33 @@ import (
 	"testing"
 )
 
+// TestExampleConfig_VoiceProfilesStructure is a committed regression guard:
+// it loads the real config.example.yaml and asserts the accessibility
+// settings parse where the code expects them. This catches the class of bug
+// where cues: was once mis-nested under brain: instead of voice: (silently
+// ignored), and ensures every voice profile ships the listen timeout.
+func TestExampleConfig_VoiceProfilesStructure(t *testing.T) {
+	cfg, err := LoadConfig("../../config.example.yaml")
+	if err != nil {
+		t.Fatalf("LoadConfig(config.example.yaml): %v", err)
+	}
+	for _, name := range []string{"voice", "manos_libres"} {
+		p, ok := cfg.Profiles[name]
+		if !ok {
+			t.Fatalf("example config missing profile %q", name)
+		}
+		// cues must be under voice: (non-empty sound proves it parsed there).
+		if p.Voice.Cues.ListeningSound == "" || p.Voice.Cues.CapturedSound == "" {
+			t.Errorf("%s: voice.cues sounds empty — cues likely mis-nested outside voice:", name)
+		}
+		// every voice profile must cap the listen window (anti-hang).
+		if p.Voice.STT.Whisper.MaxListenSeconds <= 0 {
+			t.Errorf("%s: voice.stt.whisper.max_listen_seconds must be > 0, got %v",
+				name, p.Voice.STT.Whisper.MaxListenSeconds)
+		}
+	}
+}
+
 func writeTemp(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()

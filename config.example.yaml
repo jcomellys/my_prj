@@ -109,7 +109,10 @@ profiles:
       stt:
         provider: whisper_cpp
         whisper:
-          model_path: ~/.whisper-models/ggml-small.bin
+          # medium gana al small en nombres propios (A/B: 10/10 vs 7/10) con
+          # latencia ~1.5s en M4, validado en smoke tests en vivo. Para una
+          # máquina más lenta o menor disco, usa ggml-small.bin.
+          model_path: ~/.whisper-models/ggml-medium.bin
           language: es
           silence_seconds: 1.5
           threshold: "3%"
