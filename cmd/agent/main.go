@@ -168,6 +168,21 @@ func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider,
 		if vc.STT.Whisper.Threshold != "" {
 			w.Threshold = vc.STT.Whisper.Threshold
 		}
+		if vc.STT.Whisper.MinDurationSeconds != nil {
+			w.MinDurationSeconds = *vc.STT.Whisper.MinDurationSeconds
+		}
+		if vc.STT.Whisper.LeadingPadSeconds != nil {
+			w.LeadingPadSeconds = *vc.STT.Whisper.LeadingPadSeconds
+		}
+		if vc.STT.Whisper.TrailingPadSeconds != nil {
+			w.TrailingPadSeconds = *vc.STT.Whisper.TrailingPadSeconds
+		}
+		if vc.STT.Whisper.InitialPrompt != "" {
+			w.InitialPrompt = vc.STT.Whisper.InitialPrompt
+		}
+		if vc.STT.Whisper.NoSpeechThreshold != nil {
+			w.NoSpeechThreshold = *vc.STT.Whisper.NoSpeechThreshold
+		}
 		if vc.STT.Whisper.SOXBin != "" {
 			w.SOXBin = vc.STT.Whisper.SOXBin
 		}

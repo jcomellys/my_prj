@@ -8,6 +8,14 @@
 # Usage:
 #   bash scripts/whisper_ab.sh [manifest.txt]
 #
+# Optional pipeline-tuning env vars (all default to off, preserving the
+# original pure model A/B):
+#   LEADING_PAD_SECONDS=0.50
+#   TRAILING_PAD_SECONDS=0.20
+#   MIN_DURATION_SECONDS=0.30
+#   WHISPER_PROMPT="Comandos de un asistente de Mac en español: ..."
+#   NO_SPEECH_THRESHOLD=0.30
+#
 # Manifest format (one phrase per line):
 #   path/to/recording.wav | expected transcript
 # Lines starting with # are comments.
@@ -26,6 +34,11 @@ MODEL_SMALL="${MODEL_SMALL:-$HOME/.whisper-models/ggml-small.bin}"
 MODEL_MEDIUM="${MODEL_MEDIUM:-$HOME/.whisper-models/ggml-medium.bin}"
 MANIFEST="${1:-samples/manifest.txt}"
 LANG_HINT="${LANG_HINT:-es}"
+LEADING_PAD_SECONDS="${LEADING_PAD_SECONDS:-0}"
+TRAILING_PAD_SECONDS="${TRAILING_PAD_SECONDS:-0}"
+MIN_DURATION_SECONDS="${MIN_DURATION_SECONDS:-0}"
+WHISPER_PROMPT="${WHISPER_PROMPT:-}"
+NO_SPEECH_THRESHOLD="${NO_SPEECH_THRESHOLD:-}"
 
 red()    { printf "\033[31m%s\033[0m" "$1"; }
 green()  { printf "\033[32m%s\033[0m" "$1"; }
@@ -36,10 +49,21 @@ bold()   { printf "\033[1m%s\033[0m" "$1"; }
 [ -f "$MANIFEST"     ] || { red "Falta manifest: $MANIFEST\n"; exit 1; }
 command -v whisper-cli >/dev/null || { red "whisper-cli no en PATH (brew install whisper-cpp)\n"; exit 1; }
 command -v bc          >/dev/null || { red "bc no en PATH (brew install bc)\n"; exit 1; }
+command -v perl        >/dev/null || { red "perl no en PATH (necesario para normalizar acentos)\n"; exit 1; }
+if [ "$LEADING_PAD_SECONDS" != "0" ] || [ "$TRAILING_PAD_SECONDS" != "0" ]; then
+  command -v sox >/dev/null || { red "sox no en PATH (brew install sox)\n"; exit 1; }
+fi
+if [ "$MIN_DURATION_SECONDS" != "0" ]; then
+  command -v soxi >/dev/null || { red "soxi no en PATH (brew install sox)\n"; exit 1; }
+fi
 
-# normalize: lowercase, strip punctuation, collapse whitespace
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+# normalize: lowercase, strip accents/punctuation, collapse whitespace
 norm() {
   printf "%s" "$1" \
+    | perl -MUnicode::Normalize -CS -pe '$_=NFD($_); s/\pM//g' \
     | tr '[:upper:]' '[:lower:]' \
     | tr -d '.,;:!?¡¿"\047' \
     | tr -s '[:space:]' ' ' \
@@ -49,10 +73,32 @@ norm() {
 run_one() {
   # args: model_path  wav_file
   local model="$1" wav="$2"
-  local start end lat out
+  local start end lat out input args duration padded
+
+  if [ "$MIN_DURATION_SECONDS" != "0" ]; then
+    duration=$(soxi -D "$wav" 2>/dev/null || echo 0)
+    if awk -v d="$duration" -v m="$MIN_DURATION_SECONDS" 'BEGIN { exit !(d < m) }'; then
+      printf "0.00|<skipped: too short %.2fs>" "$duration"
+      return
+    fi
+  fi
+
+  input="$wav"
+  if [ "$LEADING_PAD_SECONDS" != "0" ] || [ "$TRAILING_PAD_SECONDS" != "0" ]; then
+    padded="$TMP_DIR/$(basename "${wav%.wav}")-pad-$(basename "$model").wav"
+    sox "$wav" "$padded" pad "$LEADING_PAD_SECONDS" "$TRAILING_PAD_SECONDS"
+    input="$padded"
+  fi
+
   start=$(date +%s.%N)
-  out=$(whisper-cli -m "$model" -l "$LANG_HINT" -f "$wav" -nt -np 2>/dev/null \
-        | tr '\n' ' ' | sed 's/  */ /g; s/^ //; s/ $//')
+  args=(whisper-cli -m "$model" -l "$LANG_HINT" -f "$input" -nt -np)
+  if [ -n "$WHISPER_PROMPT" ]; then
+    args+=(--prompt "$WHISPER_PROMPT")
+  fi
+  if [ -n "$NO_SPEECH_THRESHOLD" ]; then
+    args+=(-nth "$NO_SPEECH_THRESHOLD")
+  fi
+  out=$("${args[@]}" 2>/dev/null | tr '\n' ' ' | sed 's/  */ /g; s/^ //; s/ $//')
   end=$(date +%s.%N)
   lat=$(printf "%.2f" "$(echo "$end - $start" | bc -l)")
   printf "%s|%s" "$lat" "$out"
@@ -69,6 +115,18 @@ echo  "model_small : $MODEL_SMALL"
 echo  "model_medium: $MODEL_MEDIUM"
 echo  "manifest    : $MANIFEST"
 echo  "lang        : $LANG_HINT"
+echo  "pad         : leading=${LEADING_PAD_SECONDS}s trailing=${TRAILING_PAD_SECONDS}s"
+echo  "min_duration: ${MIN_DURATION_SECONDS}s"
+if [ -n "$WHISPER_PROMPT" ]; then
+  echo "prompt      : set"
+else
+  echo "prompt      : unset"
+fi
+if [ -n "$NO_SPEECH_THRESHOLD" ]; then
+  echo "no_speech   : $NO_SPEECH_THRESHOLD"
+else
+  echo "no_speech   : default"
+fi
 echo
 
 while IFS='|' read -r filename expected; do

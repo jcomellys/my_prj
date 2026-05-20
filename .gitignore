@@ -20,6 +20,10 @@ config.local.yaml
 *.sqlite-journal
 cost.log
 
+# Local voice/STT evaluation artifacts
+/samples*/
+/stt_*.log
+
 # Go
 *.test
 *.out
@@ -30,4 +34,3 @@ coverage.txt
 .idea/
 .vscode/
 *.swp
-samples/
