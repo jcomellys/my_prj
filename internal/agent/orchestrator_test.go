@@ -35,6 +35,34 @@ func (s *scriptedBrain) Chat(_ context.Context, _ []brain.Message, _ []brain.Too
 	return &r, nil
 }
 
+// recordingBrain is a scripted brain that also records, per call, whether
+// the escalate tool spec was offered to it. Lets tests assert escalation
+// routing and that escalate is offered to the cheap brain only.
+type recordingBrain struct {
+	name            string
+	queue           []brain.Response
+	calls           int
+	sawEscalateSpec []bool
+}
+
+func (b *recordingBrain) Name() string { return b.name }
+
+func (b *recordingBrain) Chat(_ context.Context, _ []brain.Message, specs []brain.ToolSpec) (*brain.Response, error) {
+	saw := false
+	for _, s := range specs {
+		if s.Name == escalateToolName {
+			saw = true
+		}
+	}
+	b.sawEscalateSpec = append(b.sawEscalateSpec, saw)
+	if b.calls >= len(b.queue) {
+		return &brain.Response{Text: "(end)"}, nil
+	}
+	r := b.queue[b.calls]
+	b.calls++
+	return &r, nil
+}
+
 // programmableTool returns a fixed result for tests.
 type programmableTool struct {
 	name   string
@@ -179,6 +207,62 @@ func TestOrchestrator_MockBrainOpenAppEndsCleanly(t *testing.T) {
 	}
 	if !strings.Contains(reply, "Opened Chrome") {
 		t.Errorf("expected reply to mention tool result, got %q", reply)
+	}
+}
+
+func TestOrchestrator_EscalatesToDeepBrain(t *testing.T) {
+	reg := tools.NewRegistry()
+
+	cheap := &recordingBrain{name: "openai:gpt-5-mini", queue: []brain.Response{
+		{ToolCalls: []brain.ToolCall{{ID: "e1", Name: escalateToolName, Arguments: `{"reason":"hard"}`}},
+			Usage: brain.Usage{InputTokens: 100, OutputTokens: 10}},
+	}}
+	deep := &recordingBrain{name: "openai:gpt-5", queue: []brain.Response{
+		{Text: "Resuelto por el experto.", Usage: brain.Usage{InputTokens: 500, OutputTokens: 200}},
+	}}
+
+	dir := t.TempDir()
+	tr, _ := cost.NewTracker(filepath.Join(dir, "cost.log"))
+	orch := New(nil, cheap, reg, "sys", quietLogger()).WithDeepBrain(deep).WithCost(tr)
+
+	reply, err := orch.HandleUtterance(context.Background(), "analiza este problema complejo")
+	if err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+	if reply != "Resuelto por el experto." {
+		t.Errorf("expected deep brain reply, got %q", reply)
+	}
+	if cheap.calls != 1 {
+		t.Errorf("cheap brain called %d times, want 1 (just the escalate turn)", cheap.calls)
+	}
+	if deep.calls != 1 {
+		t.Errorf("deep brain called %d times, want 1", deep.calls)
+	}
+	if !cheap.sawEscalateSpec[0] {
+		t.Error("cheap brain should be offered the escalate tool")
+	}
+	if deep.sawEscalateSpec[0] {
+		t.Error("deep brain must NOT be offered the escalate tool")
+	}
+
+	// Cost must attribute to both tiers by name.
+	s, _ := tr.Since(time.Now().Add(-time.Hour))
+	if s.Entries != 2 {
+		t.Fatalf("expected 2 cost entries (cheap + deep), got %d", s.Entries)
+	}
+	if s.InputTokens != 600 || s.OutputTokens != 210 {
+		t.Errorf("token aggregation across tiers wrong: %+v", s)
+	}
+}
+
+func TestOrchestrator_NoEscalateSpecWhenSingleTier(t *testing.T) {
+	b := &recordingBrain{name: "mock", queue: []brain.Response{{Text: "hola"}}}
+	orch := New(nil, b, tools.NewRegistry(), "sys", quietLogger())
+	if _, err := orch.HandleUtterance(context.Background(), "hi"); err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+	if b.sawEscalateSpec[0] {
+		t.Error("escalate tool must not be offered when no deep brain is configured")
 	}
 }
 

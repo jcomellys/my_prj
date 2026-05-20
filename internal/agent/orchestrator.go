@@ -18,18 +18,25 @@ import (
 	"github.com/jcomellys/voice-mac-agent/internal/voice"
 )
 
+// escalateToolName is the synthetic tool the cheap brain calls to hand the
+// rest of a turn to the deep brain. It is never dispatched to the registry;
+// the orchestrator intercepts it.
+const escalateToolName = "escalate"
+
 // Orchestrator is the runtime composed in main.go.
 type Orchestrator struct {
 	Voice     voice.Provider
-	Brain     brain.Brain
+	Brain     brain.Brain // default (cheap) brain
+	DeepBrain brain.Brain // optional stronger brain; nil disables escalation
 	Tools     *tools.Registry
 	System    string // system prompt
 	MaxRounds int    // hard cap on tool-call rounds per user turn (prevents loops)
 	Log       *slog.Logger
 
-	// Cost is optional; if nil, no logging is performed.
+	// Cost is optional; if nil, no logging is performed. Pricing is resolved
+	// per call from the active brain's Name() so two-tier costs attribute
+	// correctly to cheap vs deep.
 	Cost      *cost.Tracker
-	Pricing   cost.Pricing // resolved from cost.Lookup at construction
 	SessionID string
 
 	// running conversation state — kept short by SummarizeIfLarge later
@@ -50,19 +57,39 @@ func New(v voice.Provider, b brain.Brain, reg *tools.Registry, system string, lo
 	return o
 }
 
-// WithCost attaches a cost tracker. Pricing is resolved from the brain's
-// Name(); if unknown, cost is recorded as 0 and a warning is logged.
+// WithCost attaches a cost tracker.
 func (o *Orchestrator) WithCost(t *cost.Tracker) *Orchestrator {
 	o.Cost = t
-	if p, ok := cost.Lookup(o.Brain.Name()); ok {
-		o.Pricing = p
-	} else {
-		o.Log.Warn("cost.pricing.unknown",
-			"brain", o.Brain.Name(),
-			"hint", "add an entry in internal/cost/pricing.go to track this brain's cost",
-		)
-	}
 	return o
+}
+
+// WithDeepBrain enables two-tier routing: the default Brain handles simple
+// turns cheaply and can escalate to deep via the `escalate` tool. Passing
+// nil leaves single-tier behavior unchanged.
+func (o *Orchestrator) WithDeepBrain(b brain.Brain) *Orchestrator {
+	o.DeepBrain = b
+	return o
+}
+
+// escalateSpec is offered to the cheap brain only. It lets the model itself
+// decide a turn is too hard, keeping classification cost to a single cheap
+// call instead of a separate router model.
+func escalateSpec() brain.ToolSpec {
+	return brain.ToolSpec{
+		Name: escalateToolName,
+		Description: "Escala a un modelo más potente SOLO cuando la petición requiera razonamiento profundo, planeación de varios pasos, análisis, matemática, programación o investigación que supere comandos simples. El modelo experto continúa el resto de este turno. NO la llames para acciones simples (abrir apps, decir la hora, navegar una URL, cerrar pestañas): esas resuélvelas tú.",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"reason": map[string]any{
+					"type":        "string",
+					"description": "Motivo breve de por qué necesita el experto.",
+				},
+			},
+			"required":             []string{"reason"},
+			"additionalProperties": false,
+		},
+	}
 }
 
 func newSessionID() string {
@@ -87,15 +114,25 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (string, error) {
 	o.Log.Info("user.utterance", "text", userText)
 	o.history = append(o.history, brain.Message{Role: brain.RoleUser, Content: userText})
-	specs := o.Tools.Specs()
+
+	activeBrain := o.Brain
 
 	for round := 0; round < o.MaxRounds; round++ {
-		resp, err := o.Brain.Chat(ctx, o.history, specs)
+		// Offer the escalate tool only while running on the cheap brain.
+		specs := o.Tools.Specs()
+		if o.DeepBrain != nil && activeBrain != o.DeepBrain {
+			specs = append(specs, escalateSpec())
+		}
+
+		resp, err := activeBrain.Chat(ctx, o.history, specs)
 		if err != nil {
 			return "", fmt.Errorf("brain: %w", err)
 		}
-		usd := o.Pricing.USD(resp.Usage.InputTokens, resp.Usage.OutputTokens, resp.Usage.CachedInputTokens)
+
+		pricing, _ := cost.Lookup(activeBrain.Name())
+		usd := pricing.USD(resp.Usage.InputTokens, resp.Usage.OutputTokens, resp.Usage.CachedInputTokens)
 		o.Log.Info("brain.response",
+			"brain", activeBrain.Name(),
 			"round", round,
 			"text_len", len(resp.Text),
 			"text", truncateForLog(resp.Text, 500),
@@ -108,7 +145,7 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 		if o.Cost != nil {
 			_ = o.Cost.Record(cost.Entry{
 				SessionID:         o.SessionID,
-				BrainName:         o.Brain.Name(),
+				BrainName:         activeBrain.Name(),
 				InputTokens:       resp.Usage.InputTokens,
 				OutputTokens:      resp.Usage.OutputTokens,
 				CachedInputTokens: resp.Usage.CachedInputTokens,
@@ -128,9 +165,28 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 			return resp.Text, nil
 		}
 
-		// Execute each tool call and append its result (including any
-		// attached images, e.g. from the screenshot tool).
+		// Execute each tool call. The synthetic `escalate` call is handled
+		// by the orchestrator (switch to the deep brain) and never reaches
+		// the registry.
 		for _, tc := range resp.ToolCalls {
+			if tc.Name == escalateToolName {
+				if o.DeepBrain != nil && activeBrain != o.DeepBrain {
+					o.Log.Info("brain.escalate",
+						"from", activeBrain.Name(),
+						"to", o.DeepBrain.Name(),
+						"reason", truncateForLog(tc.Arguments, 200),
+					)
+					activeBrain = o.DeepBrain
+				}
+				o.history = append(o.history, brain.Message{
+					Role:       brain.RoleTool,
+					Name:       tc.Name,
+					ToolCallID: tc.ID,
+					Content:    "Eres ahora el modelo experto. Atiende la petición del usuario completamente en los siguientes pasos.",
+				})
+				continue
+			}
+
 			res, err := o.runTool(ctx, tc)
 			argsAudit := truncateForLog(tc.Arguments, 800)
 			if err != nil {

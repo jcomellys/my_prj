@@ -34,9 +34,13 @@ profiles:
         provider: macos_say
     brain:
       provider: openai
-      model: gpt-5-mini      # router barato. Escala a gpt-5 cuando hace falta
+      model: gpt-5-mini       # router barato: maneja lo simple
       temperature: 0.3
       max_tokens: 2048
+      deep:                   # escala aquí solo cuando el barato lo decide
+        provider: openai
+        model: gpt-5
+        max_tokens: 4096
     activator:
       kind: stdin
 

@@ -103,10 +103,14 @@ otra activación dispara.
 
 - [x] `internal/brain/anthropic.go` — Claude with prompt caching (system
       prompt + tool block both marked `cache_control: ephemeral`).
-- [ ] Router/escalation: agent picks `gpt-5-mini` (or Haiku) first;
-      a `delegate_to_deep_brain` tool calls the expensive model when
-      needed. The expensive model returns text that the cheap model
-      narrates to the user.
+- [x] Router/escalation: the cheap brain (`gpt-5-mini`) is the default
+      and handles simple turns. It is offered an `escalate` tool; when it
+      judges a turn needs deep reasoning it calls it, and the orchestrator
+      switches to the deep brain (`gpt-5`) for the rest of that turn. The
+      escalate tool is offered to the cheap brain only. Cost is attributed
+      per tier (Lookup by active brain's Name()). Config: brain.deep
+      {provider, model, ...}. Built + unit-tested in the sandbox; live
+      validation pending on the Mac.
 - [x] `internal/cost/tracker.go` — append-only NDJSON cost log
       (zero-deps, USB-portable, crash-safe). Records every brain call:
       timestamp, session id, brain name, tokens in/out/cached, USD.

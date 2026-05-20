@@ -99,6 +99,21 @@ func main() {
 	if tracker != nil {
 		orch.WithCost(tracker)
 	}
+	// Two-tier routing: if a deep brain is configured, the cheap brain
+	// escalates hard turns to it. Most turns stay cheap.
+	if d := prof.Brain.Deep; d != nil {
+		deep, err := buildBrain(agent.BrainConfig{
+			Provider:    d.Provider,
+			Model:       d.Model,
+			Temperature: d.Temperature,
+			MaxTokens:   d.MaxTokens,
+		})
+		if err != nil {
+			fatal(log, fmt.Errorf("deep brain: %w", err))
+		}
+		orch.WithDeepBrain(deep)
+		log.Info("brain.deep.ready", "name", deep.Name())
+	}
 
 	// --- Run ----------------------------------------------------------------
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
