@@ -1,6 +1,9 @@
 package stt
 
 import (
+	"context"
+	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -81,6 +84,96 @@ func TestIsSilent(t *testing.T) {
 	}
 }
 
+func TestWhisperCPPListenSkipsTooShortClipBeforeWhisper(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fake not implemented for windows")
+	}
+	dir := t.TempDir()
+	sox := filepath.Join(dir, "sox")
+	whisper := filepath.Join(dir, "whisper")
+	whisperCalled := filepath.Join(dir, "whisper-called")
+
+	// 0.25s at 16kHz mono 16-bit PCM plus a minimal WAV header. This is
+	// large enough to pass the legacy byte-size guard but too short to trust.
+	writeScript(t, sox, "#!/bin/sh\nout=\"$9\"\ndd if=/dev/zero of=\"$out\" bs=1 count=8044 >/dev/null 2>&1\n")
+	writeScript(t, whisper, fmt.Sprintf("#!/bin/sh\ntouch %q\nexit 42\n", whisperCalled))
+
+	w := NewWhisperCPP("/tmp/model.bin")
+	w.SOXBin = sox
+	w.WhisperBin = whisper
+	w.VerboseEcho = false
+	w.MinDurationSeconds = 0.30
+
+	got, err := w.Listen(context.Background())
+	if !IsSilent(err) {
+		t.Fatalf("Listen() err = %v, want silent", err)
+	}
+	if got != "" {
+		t.Fatalf("Listen() text = %q, want empty", got)
+	}
+	if _, err := os.Stat(whisperCalled); !os.IsNotExist(err) {
+		t.Fatalf("whisper was called for too-short audio")
+	}
+}
+
+func TestWhisperCPPTranscribePassesPromptAndNoSpeechThreshold(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fake not implemented for windows")
+	}
+	dir := t.TempDir()
+	argsFile := filepath.Join(dir, "args.txt")
+	whisper := filepath.Join(dir, "whisper")
+	writeScript(t, whisper, fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" > %q\necho ok\n", argsFile))
+
+	wav := filepath.Join(dir, "clip.wav")
+	if err := os.WriteFile(wav, make([]byte, 44+32000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	w := NewWhisperCPP("/tmp/model.bin")
+	w.WhisperBin = whisper
+	w.Language = "es"
+	w.InitialPrompt = "comandos Mac en español"
+	w.NoSpeechThreshold = 0.30
+
+	got, err := w.transcribe(context.Background(), wav)
+	if err != nil {
+		t.Fatalf("transcribe: %v", err)
+	}
+	if strings.TrimSpace(got) != "ok" {
+		t.Fatalf("transcribe output = %q, want ok", got)
+	}
+
+	data, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := "\n" + string(data)
+	for _, want := range []string{
+		"\n-l\nes\n",
+		"\n--prompt\ncomandos Mac en español\n",
+		"\n-nth\n0.30\n",
+	} {
+		if !strings.Contains(args, want) {
+			t.Fatalf("args missing %q in:\n%s", want, args)
+		}
+	}
+}
+
+func TestWavPCM16MonoDurationSeconds(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "clip.wav")
+	if err := os.WriteFile(path, make([]byte, 44+16000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := wavPCM16MonoDurationSeconds(path)
+	if !ok {
+		t.Fatal("duration should be available")
+	}
+	if math.Abs(got-0.5) > 0.001 {
+		t.Fatalf("duration = %.4f, want 0.5", got)
+	}
+}
+
 // TestWhisperCPP_PreflightChecksModel verifies the preflight surfaces a
 // helpful error when the model file is missing.
 func TestWhisperCPP_PreflightChecksModel(t *testing.T) {
@@ -126,4 +219,11 @@ func fakeOK(t *testing.T) string {
 		t.Fatalf("write fake: %v", err)
 	}
 	return path
+}
+
+func writeScript(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
 }

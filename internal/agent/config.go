@@ -32,12 +32,17 @@ type STTConfig struct {
 }
 
 type WhisperSTTConfig struct {
-	ModelPath      string  `yaml:"model_path"`      // e.g. "~/.whisper-models/ggml-small.bin"
-	Language       string  `yaml:"language"`        // "es" | "en" | "auto"
-	SilenceSeconds float64 `yaml:"silence_seconds"` // end-of-utterance threshold; default 1.5
-	Threshold      string  `yaml:"threshold"`       // sox amplitude threshold, e.g. "3%"
-	SOXBin         string  `yaml:"sox_bin"`         // override "sox" path
-	WhisperBin     string  `yaml:"whisper_bin"`     // override "whisper-cli" path
+	ModelPath          string   `yaml:"model_path"`           // e.g. "~/.whisper-models/ggml-small.bin"
+	Language           string   `yaml:"language"`             // "es" | "en" | "auto"
+	SilenceSeconds     float64  `yaml:"silence_seconds"`      // end-of-utterance threshold; default 1.5
+	Threshold          string   `yaml:"threshold"`            // sox amplitude threshold, e.g. "3%"
+	MinDurationSeconds *float64 `yaml:"min_duration_seconds"` // reject shorter clips before whisper
+	LeadingPadSeconds  *float64 `yaml:"leading_pad_seconds"`  // silence prepended before whisper
+	TrailingPadSeconds *float64 `yaml:"trailing_pad_seconds"` // silence appended before whisper
+	InitialPrompt      string   `yaml:"initial_prompt"`       // whisper vocabulary/context hint
+	NoSpeechThreshold  *float64 `yaml:"no_speech_threshold"`  // optional whisper -nth override
+	SOXBin             string   `yaml:"sox_bin"`              // override "sox" path
+	WhisperBin         string   `yaml:"whisper_bin"`          // override "whisper-cli" path
 }
 
 type TTSConfig struct {

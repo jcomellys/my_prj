@@ -75,6 +75,15 @@ profiles:
           language: es
           silence_seconds: 1.5          # stop recording after this much silence
           threshold: "3%"               # raise to 5-10% in noisy rooms
+          min_duration_seconds: 0.30    # skip clips too short to be trusted
+          leading_pad_seconds: 0.50     # helps Whisper keep the first word
+          trailing_pad_seconds: 0.20
+          initial_prompt: >
+            Vocabulario frecuente para comandos de Mac en español. Verbos:
+            abre, busca, léeme, lee, cierra, navega, escribe, describe.
+            Aplicaciones y sitios: Google Chrome, Mensajes, Wikipedia,
+            YouTube, Word. Objetos: pestaña, página, pantalla, párrafo,
+            hora, gasto.
       tts:
         provider: macos_say
     brain:
@@ -99,6 +108,15 @@ profiles:
           language: es
           silence_seconds: 1.5
           threshold: "3%"
+          min_duration_seconds: 0.30
+          leading_pad_seconds: 0.50
+          trailing_pad_seconds: 0.20
+          initial_prompt: >
+            Vocabulario frecuente para comandos de Mac en español. Verbos:
+            abre, busca, léeme, lee, cierra, navega, escribe, describe.
+            Aplicaciones y sitios: Google Chrome, Mensajes, Wikipedia,
+            YouTube, Word. Objetos: pestaña, página, pantalla, párrafo,
+            hora, gasto.
       tts:
         provider: macos_say
     brain:

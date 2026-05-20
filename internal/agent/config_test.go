@@ -64,6 +64,72 @@ profiles:
 	}
 }
 
+func TestLoadConfig_WhisperTuningPreservesExplicitZero(t *testing.T) {
+	path := writeTemp(t, `
+active_profile: voice
+profiles:
+  voice:
+    voice:
+      mode: pipeline
+      stt:
+        provider: whisper_cpp
+        whisper:
+          model_path: ~/.whisper-models/ggml-small.bin
+          min_duration_seconds: 0
+          leading_pad_seconds: 0
+          trailing_pad_seconds: 0
+          no_speech_threshold: 0
+      tts: { provider: macos_say }
+    brain: { provider: mock }
+    activator: { kind: stdin }
+`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	w := cfg.Active().Voice.STT.Whisper
+	cases := map[string]*float64{
+		"min_duration_seconds": w.MinDurationSeconds,
+		"leading_pad_seconds":  w.LeadingPadSeconds,
+		"trailing_pad_seconds": w.TrailingPadSeconds,
+		"no_speech_threshold":  w.NoSpeechThreshold,
+	}
+	for name, got := range cases {
+		if got == nil {
+			t.Fatalf("%s should preserve explicit zero as non-nil", name)
+		}
+		if *got != 0 {
+			t.Fatalf("%s = %v, want 0", name, *got)
+		}
+	}
+}
+
+func TestLoadConfig_WhisperTuningOmittedIsNil(t *testing.T) {
+	path := writeTemp(t, `
+active_profile: voice
+profiles:
+  voice:
+    voice:
+      mode: pipeline
+      stt:
+        provider: whisper_cpp
+        whisper:
+          model_path: ~/.whisper-models/ggml-small.bin
+      tts: { provider: macos_say }
+    brain: { provider: mock }
+    activator: { kind: stdin }
+`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	w := cfg.Active().Voice.STT.Whisper
+	if w.MinDurationSeconds != nil || w.LeadingPadSeconds != nil ||
+		w.TrailingPadSeconds != nil || w.NoSpeechThreshold != nil {
+		t.Fatalf("omitted whisper tuning fields should remain nil: %+v", w)
+	}
+}
+
 func TestLoadConfig_EmptyActiveProfileErrors(t *testing.T) {
 	path := writeTemp(t, `
 profiles:

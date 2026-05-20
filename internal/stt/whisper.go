@@ -18,16 +18,21 @@ import (
 //
 // Dependencies (Mac): brew install sox whisper-cpp
 // Model:              ~/.whisper-models/ggml-<size>.bin
-//   tiny:   fastest, weakest (recommend only for english quick demos)
-//   base:   small balance, ok for clear speech
-//   small:  *recommended* for production; multilingual, decent accuracy
-//   medium: better accuracy; slower; ~1.5 GB
+//
+//	tiny:   fastest, weakest (recommend only for english quick demos)
+//	base:   small balance, ok for clear speech
+//	small:  *recommended* for production; multilingual, decent accuracy
+//	medium: better accuracy; slower; ~1.5 GB
 //
 // Recording pipeline uses `sox -d` with the silence filter:
-//   sox -d out.wav silence 1 0.1 3% 1 1.5 3%
+//
+//	sox -d out.wav silence 1 0.1 3% 1 1.5 3%
+//
 // meaning: start recording as soon as audio above 3% is heard; stop after
 // 1.5 s of silence at the same threshold. Adjust SilenceSeconds and
-// Threshold for noisy environments.
+// Threshold for noisy environments. After recording, the audio can be padded
+// with silence before transcription; this gives Whisper context at the start
+// of very short command clips without sending fake words to the brain.
 type WhisperCPP struct {
 	// Binary paths. If empty, defaults are looked up on PATH.
 	SOXBin     string
@@ -43,6 +48,13 @@ type WhisperCPP struct {
 	SilenceSeconds float64 // default 1.5
 	Threshold      string  // default "3%"
 
+	// Short-clip defense and transcription conditioning.
+	MinDurationSeconds float64 // default 0.30; clips below this are silence/noise
+	LeadingPadSeconds  float64 // default 0.50; prepended before whisper
+	TrailingPadSeconds float64 // default 0.20; appended before whisper
+	InitialPrompt      string  // optional whisper prompt for command vocabulary
+	NoSpeechThreshold  float64 // optional whisper -nth override
+
 	// Working directory for the temporary recording WAV. Defaults to OS temp.
 	TempDir string
 
@@ -53,11 +65,14 @@ type WhisperCPP struct {
 
 func NewWhisperCPP(modelPath string) *WhisperCPP {
 	return &WhisperCPP{
-		ModelPath:      modelPath,
-		Language:       "auto",
-		SilenceSeconds: 1.5,
-		Threshold:      "3%",
-		VerboseEcho:    true,
+		ModelPath:          modelPath,
+		Language:           "auto",
+		SilenceSeconds:     1.5,
+		Threshold:          "3%",
+		MinDurationSeconds: 0.30,
+		LeadingPadSeconds:  0.50,
+		TrailingPadSeconds: 0.20,
+		VerboseEcho:        true,
 	}
 }
 
@@ -91,7 +106,21 @@ func (w *WhisperCPP) Listen(ctx context.Context) (string, error) {
 	}
 	defer os.Remove(wav)
 
-	text, err := w.transcribe(ctx, wav)
+	if w.tooShort(wav) {
+		return "", errSilent
+	}
+
+	transcriptionWav := wav
+	if w.LeadingPadSeconds > 0 || w.TrailingPadSeconds > 0 {
+		padded, err := w.padForTranscription(ctx, wav)
+		if err != nil {
+			return "", err
+		}
+		transcriptionWav = padded
+		defer os.Remove(padded)
+	}
+
+	text, err := w.transcribe(ctx, transcriptionWav)
 	if err != nil {
 		return "", err
 	}
@@ -167,6 +196,47 @@ func (w *WhisperCPP) record(ctx context.Context) (string, error) {
 	return wavPath, nil
 }
 
+func (w *WhisperCPP) tooShort(wav string) bool {
+	minDuration := w.MinDurationSeconds
+	if minDuration <= 0 {
+		return false
+	}
+	duration, ok := wavPCM16MonoDurationSeconds(wav)
+	return ok && duration < minDuration
+}
+
+func (w *WhisperCPP) padForTranscription(ctx context.Context, wav string) (string, error) {
+	dir := w.TempDir
+	if dir == "" {
+		dir = os.TempDir()
+	}
+	f, err := os.CreateTemp(dir, "agent-rec-padded-*.wav")
+	if err != nil {
+		return "", fmt.Errorf("temp padded wav: %w", err)
+	}
+	paddedPath := f.Name()
+	_ = f.Close()
+
+	args := []string{
+		"-q",
+		wav,
+		paddedPath,
+		"pad",
+		formatSeconds(w.LeadingPadSeconds),
+		formatSeconds(w.TrailingPadSeconds),
+	}
+	cmd := exec.CommandContext(ctx, w.soxBin(), args...)
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		_ = os.Remove(paddedPath)
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", fmt.Errorf("sox pad: %w", err)
+	}
+	return paddedPath, nil
+}
+
 // --- transcription with whisper.cpp ----------------------------------------
 
 func (w *WhisperCPP) transcribe(ctx context.Context, wav string) (string, error) {
@@ -176,6 +246,12 @@ func (w *WhisperCPP) transcribe(ctx context.Context, wav string) (string, error)
 		"-l", w.langOrAuto(),
 		"-nt", // no timestamps in output
 		"-np", // no progress prints
+	}
+	if w.InitialPrompt != "" {
+		args = append(args, "--prompt", w.InitialPrompt)
+	}
+	if w.NoSpeechThreshold > 0 {
+		args = append(args, "-nth", formatSeconds(w.NoSpeechThreshold))
 	}
 	cmd := exec.CommandContext(ctx, w.whisperBin(), args...)
 	out, err := cmd.Output()
@@ -217,6 +293,25 @@ func (w *WhisperCPP) langOrAuto() string {
 		return "auto"
 	}
 	return w.Language
+}
+
+func formatSeconds(v float64) string {
+	return strconv.FormatFloat(v, 'f', 2, 64)
+}
+
+func wavPCM16MonoDurationSeconds(path string) (float64, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, false
+	}
+	const (
+		wavHeaderBytes = 44
+		bytesPerSecond = 16000 * 2 // 16kHz, mono, 16-bit PCM from record().
+	)
+	if info.Size() <= wavHeaderBytes {
+		return 0, true
+	}
+	return float64(info.Size()-wavHeaderBytes) / bytesPerSecond, true
 }
 
 // nonSpeechMarker matches bracketed/parenthesized non-speech labels that
