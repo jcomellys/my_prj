@@ -32,8 +32,10 @@ own outbound file (newest entry on top) and only reads the other's.
 ---
 ```
 - `id`: short, increasing, e.g. C-014, X-014 (C=from Claude, X=from Codex).
-- STATUS for tasks (in inbox_codex.md): NEW → (Codex reports) → reference it DONE in its report.
-- STATUS for reports (in inbox_claude.md): NEW → (Claude reads) → Claude flips to SEEN in its NEXT task entry, not by editing the report.
+- STATUS values: NEW → DONE (task finished) | SEEN (report read) | BLOCKED.
+- The reader acknowledges by flipping the STATUS token **in place** on the
+  entry's header line (this is the one allowed cross-edit). Optionally add a
+  short parenthetical note after the STATUS. Do not rewrite the body.
 
 ## Task body shape (Claude → Codex)
 ```
