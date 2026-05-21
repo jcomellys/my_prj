@@ -39,6 +39,10 @@ type Orchestrator struct {
 	Cost      *cost.Tracker
 	SessionID string
 
+	// warnedPricing dedups the "unknown pricing" warning to once per brain
+	// name so an unpriced model doesn't spam the log every turn.
+	warnedPricing map[string]bool
+
 	// running conversation state — kept short by SummarizeIfLarge later
 	history []brain.Message
 }
@@ -49,9 +53,10 @@ func New(v voice.Provider, b brain.Brain, reg *tools.Registry, system string, lo
 		Brain:     b,
 		Tools:     reg,
 		System:    system,
-		MaxRounds: 6,
-		Log:       log,
-		SessionID: newSessionID(),
+		MaxRounds:     6,
+		Log:           log,
+		SessionID:     newSessionID(),
+		warnedPricing: map[string]bool{},
 	}
 	o.reset()
 	return o
@@ -77,7 +82,14 @@ func (o *Orchestrator) WithDeepBrain(b brain.Brain) *Orchestrator {
 func escalateSpec() brain.ToolSpec {
 	return brain.ToolSpec{
 		Name: escalateToolName,
-		Description: "Escala a un modelo más potente SOLO cuando la petición requiera razonamiento profundo, planeación de varios pasos, análisis, matemática, programación o investigación que supere comandos simples. El modelo experto continúa el resto de este turno. NO la llames para acciones simples (abrir apps, decir la hora, navegar una URL, cerrar pestañas): esas resuélvelas tú.",
+		Description: "Cambia a un modelo experto más potente que continúa este turno. " +
+			"DEBES escalar (llamar esta tool) en estos casos, aunque creas que podrías responder tú: " +
+			"enseñar o explicar un concepto a fondo, analizar un libro/texto/circuito/imagen, " +
+			"crear un plan de estudio o de trabajo, resolver matemática, escribir o depurar código, " +
+			"razonamiento de varios pasos, investigación, o cualquier respuesta educativa larga. " +
+			"NO escales para acciones simples: abrir apps, decir la hora, navegar una URL, cerrar " +
+			"pestañas, preguntas de una sola frase. Esas resuélvelas tú directamente. " +
+			"Ante la duda entre enseñar/analizar/planear: escala.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -129,7 +141,14 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 			return "", fmt.Errorf("brain: %w", err)
 		}
 
-		pricing, _ := cost.Lookup(activeBrain.Name())
+		pricing, priced := cost.Lookup(activeBrain.Name())
+		if !priced && !o.warnedPricing[activeBrain.Name()] {
+			o.warnedPricing[activeBrain.Name()] = true
+			o.Log.Warn("cost.pricing.unknown",
+				"brain", activeBrain.Name(),
+				"hint", "add an entry in internal/cost/pricing.go; cost recorded as $0 until then",
+			)
+		}
 		usd := pricing.USD(resp.Usage.InputTokens, resp.Usage.OutputTokens, resp.Usage.CachedInputTokens)
 		o.Log.Info("brain.response",
 			"brain", activeBrain.Name(),

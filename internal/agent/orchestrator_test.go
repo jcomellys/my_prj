@@ -255,6 +255,25 @@ func TestOrchestrator_EscalatesToDeepBrain(t *testing.T) {
 	}
 }
 
+// TestEscalateSpec_QualityFirstEducationalPolicy guards the user's chosen
+// policy (2026-05-21): educational/teaching/analysis/planning content should
+// escalate to the deep brain, while simple commands stay cheap.
+func TestEscalateSpec_QualityFirstEducationalPolicy(t *testing.T) {
+	desc := strings.ToLower(escalateSpec().Description)
+	mustEscalate := []string{"enseñar", "explicar", "analizar", "plan de estudio", "código", "matemática"}
+	for _, kw := range mustEscalate {
+		if !strings.Contains(desc, strings.ToLower(kw)) {
+			t.Errorf("escalate description should mention educational trigger %q", kw)
+		}
+	}
+	// Must still tell the cheap brain to keep simple actions itself.
+	for _, kw := range []string{"abrir apps", "hora", "cerrar"} {
+		if !strings.Contains(desc, strings.ToLower(kw)) {
+			t.Errorf("escalate description should exclude simple action %q", kw)
+		}
+	}
+}
+
 func TestOrchestrator_NoEscalateSpecWhenSingleTier(t *testing.T) {
 	b := &recordingBrain{name: "mock", queue: []brain.Response{{Text: "hola"}}}
 	orch := New(nil, b, tools.NewRegistry(), "sys", quietLogger())

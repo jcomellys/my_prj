@@ -31,6 +31,8 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"repetir",
 		// Time should resolve via AppleScript, not run_shell.
 		"current date",
+		// Fase 0.4: English bundle names for open_app (localization fix).
+		"Messages",
 	}
 	for _, s := range required {
 		if !strings.Contains(strings.ToLower(DefaultSystemPrompt), strings.ToLower(s)) {
