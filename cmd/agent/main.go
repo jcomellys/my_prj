@@ -98,6 +98,7 @@ func main() {
 	orch := agent.New(v, b, registry, agent.DefaultSystemPrompt, log)
 	if tracker != nil {
 		orch.WithCost(tracker)
+		orch.WithBudget(cfg.Cost.MonthlyBudgetUSD, cfg.Cost.WarnAtPct)
 	}
 	// Two-tier routing: if a deep brain is configured, the cheap brain
 	// escalates hard turns to it. Most turns stay cheap.

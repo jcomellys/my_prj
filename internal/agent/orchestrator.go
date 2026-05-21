@@ -39,6 +39,13 @@ type Orchestrator struct {
 	Cost      *cost.Tracker
 	SessionID string
 
+	// Budget guard. MonthlyBudgetUSD <= 0 means no limit. When month-to-date
+	// spend reaches the budget the agent refuses turns (spoken). When it
+	// crosses WarnAtPct it appends a one-time spoken heads-up.
+	MonthlyBudgetUSD float64
+	WarnAtPct        int
+	warnedBudget     bool
+
 	// warnedPricing dedups the "unknown pricing" warning to once per brain
 	// name so an unpriced model doesn't spam the log every turn.
 	warnedPricing map[string]bool
@@ -65,6 +72,15 @@ func New(v voice.Provider, b brain.Brain, reg *tools.Registry, system string, lo
 // WithCost attaches a cost tracker.
 func (o *Orchestrator) WithCost(t *cost.Tracker) *Orchestrator {
 	o.Cost = t
+	return o
+}
+
+// WithBudget sets a month-to-date spend cap. monthlyUSD <= 0 disables the
+// hard stop. warnAtPct (1-100) triggers a one-time spoken heads-up when
+// crossed; <= 0 disables the warning. Requires a cost tracker to do anything.
+func (o *Orchestrator) WithBudget(monthlyUSD float64, warnAtPct int) *Orchestrator {
+	o.MonthlyBudgetUSD = monthlyUSD
+	o.WarnAtPct = warnAtPct
 	return o
 }
 
@@ -125,6 +141,13 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 // Stops when the Brain returns text and no tool calls (final reply for the user).
 func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (string, error) {
 	o.Log.Info("user.utterance", "text", userText)
+
+	// Budget hard stop: refuse before spending anything if month-to-date
+	// spend has reached the cap. Spoken so a non-sighted user understands.
+	if reply, stop := o.budgetHardStop(); stop {
+		return reply, nil
+	}
+
 	o.history = append(o.history, brain.Message{Role: brain.RoleUser, Content: userText})
 
 	activeBrain := o.Brain
@@ -181,7 +204,7 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 
 		// No tools requested: final reply.
 		if len(resp.ToolCalls) == 0 {
-			return resp.Text, nil
+			return o.maybeAppendBudgetWarning(resp.Text), nil
 		}
 
 		// Execute each tool call. The synthetic `escalate` call is handled
@@ -225,6 +248,52 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 	}
 
 	return "Lo siento, no pude completar la tarea en un número razonable de pasos.", nil
+}
+
+// budgetHardStop reports whether month-to-date spend has reached the cap.
+// When it has, it returns a spoken refusal and stop=true so the caller
+// returns before invoking any brain.
+func (o *Orchestrator) budgetHardStop() (reply string, stop bool) {
+	if o.Cost == nil || o.MonthlyBudgetUSD <= 0 {
+		return "", false
+	}
+	s, err := o.Cost.Month()
+	if err != nil {
+		o.Log.Warn("budget.read_failed", "err", err)
+		return "", false
+	}
+	if s.USD >= o.MonthlyBudgetUSD {
+		o.Log.Warn("budget.exceeded", "month_usd", s.USD, "budget_usd", o.MonthlyBudgetUSD)
+		return fmt.Sprintf(
+			"Has alcanzado tu presupuesto mensual de %.2f dólares (llevas %.2f). "+
+				"No puedo continuar hasta que subas el límite en la configuración.",
+			o.MonthlyBudgetUSD, s.USD), true
+	}
+	return "", false
+}
+
+// maybeAppendBudgetWarning adds a one-time spoken heads-up to a reply when
+// month-to-date spend crosses WarnAtPct of the budget.
+func (o *Orchestrator) maybeAppendBudgetWarning(reply string) string {
+	if o.warnedBudget || o.Cost == nil || o.MonthlyBudgetUSD <= 0 || o.WarnAtPct <= 0 {
+		return reply
+	}
+	s, err := o.Cost.Month()
+	if err != nil {
+		return reply
+	}
+	threshold := o.MonthlyBudgetUSD * float64(o.WarnAtPct) / 100.0
+	if s.USD < threshold {
+		return reply
+	}
+	o.warnedBudget = true
+	pct := int(s.USD / o.MonthlyBudgetUSD * 100)
+	o.Log.Warn("budget.warn", "month_usd", s.USD, "budget_usd", o.MonthlyBudgetUSD, "pct", pct)
+	notice := fmt.Sprintf(" Aviso: llevas gastado el %d por ciento de tu presupuesto mensual.", pct)
+	if reply == "" {
+		return notice
+	}
+	return reply + notice
 }
 
 func (o *Orchestrator) runTool(ctx context.Context, tc brain.ToolCall) (tools.Result, error) {

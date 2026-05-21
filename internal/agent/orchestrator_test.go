@@ -258,6 +258,77 @@ func TestOrchestrator_EscalatesToDeepBrain(t *testing.T) {
 // TestEscalateSpec_QualityFirstEducationalPolicy guards the user's chosen
 // policy (2026-05-21): educational/teaching/analysis/planning content should
 // escalate to the deep brain, while simple commands stay cheap.
+func TestOrchestrator_BudgetHardStop(t *testing.T) {
+	dir := t.TempDir()
+	tr, _ := cost.NewTracker(filepath.Join(dir, "cost.log"))
+	// Pre-load this month's spend above the budget.
+	_ = tr.Record(cost.Entry{Timestamp: time.Now(), BrainName: "openai:gpt-5", USD: 5.00})
+
+	b := &recordingBrain{name: "openai:gpt-5", queue: []brain.Response{{Text: "no debería llegar"}}}
+	orch := New(nil, b, tools.NewRegistry(), "sys", quietLogger()).
+		WithCost(tr).
+		WithBudget(2.00, 80)
+
+	reply, err := orch.HandleUtterance(context.Background(), "abre Chrome")
+	if err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+	if !strings.Contains(reply, "presupuesto") {
+		t.Errorf("expected spoken budget refusal, got %q", reply)
+	}
+	if b.calls != 0 {
+		t.Errorf("brain must not be called when over budget, got %d calls", b.calls)
+	}
+}
+
+func TestOrchestrator_BudgetWarningAppended(t *testing.T) {
+	dir := t.TempDir()
+	tr, _ := cost.NewTracker(filepath.Join(dir, "cost.log"))
+	// 1.70 of a 2.00 budget = 85%, above the 80% warn threshold but below cap.
+	_ = tr.Record(cost.Entry{Timestamp: time.Now(), BrainName: "openai:gpt-5-mini", USD: 1.70})
+
+	b := &recordingBrain{name: "openai:gpt-5-mini", queue: []brain.Response{{Text: "Listo."}}}
+	orch := New(nil, b, tools.NewRegistry(), "sys", quietLogger()).
+		WithCost(tr).
+		WithBudget(2.00, 80)
+
+	reply, err := orch.HandleUtterance(context.Background(), "abre Chrome")
+	if err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+	if !strings.Contains(reply, "Listo.") {
+		t.Errorf("expected the turn to still be handled, got %q", reply)
+	}
+	if !strings.Contains(strings.ToLower(reply), "presupuesto") {
+		t.Errorf("expected a budget warning appended, got %q", reply)
+	}
+
+	// Second turn must NOT repeat the warning.
+	b.queue = []brain.Response{{Text: "Hecho."}}
+	b.calls = 0
+	reply2, _ := orch.HandleUtterance(context.Background(), "abre Notas")
+	if strings.Contains(strings.ToLower(reply2), "presupuesto") {
+		t.Errorf("budget warning should fire once per session, got %q", reply2)
+	}
+}
+
+func TestOrchestrator_NoBudgetWhenUnset(t *testing.T) {
+	dir := t.TempDir()
+	tr, _ := cost.NewTracker(filepath.Join(dir, "cost.log"))
+	_ = tr.Record(cost.Entry{Timestamp: time.Now(), BrainName: "openai:gpt-5", USD: 999})
+
+	b := &recordingBrain{name: "openai:gpt-5", queue: []brain.Response{{Text: "ok"}}}
+	orch := New(nil, b, tools.NewRegistry(), "sys", quietLogger()).WithCost(tr) // no WithBudget
+
+	reply, err := orch.HandleUtterance(context.Background(), "hola")
+	if err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+	if reply != "ok" || b.calls != 1 {
+		t.Errorf("with no budget set, turn must proceed normally; reply=%q calls=%d", reply, b.calls)
+	}
+}
+
 func TestEscalateSpec_QualityFirstEducationalPolicy(t *testing.T) {
 	desc := strings.ToLower(escalateSpec().Description)
 	mustEscalate := []string{"enseñar", "explicar", "analizar", "plan de estudio", "código", "matemática"}

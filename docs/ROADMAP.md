@@ -119,7 +119,11 @@ otra activación dispara.
       OpenAI gpt-5 family and Anthropic Claude 4 family.
 - [x] Tool: `show_cost` so the user can ask "cuánto llevo gastado hoy"
       / "este mes" — brain calls the tool and narrates the result.
-- [ ] Hard-stop when `monthly_budget_usd` exceeded (configurable).
+- [x] Hard-stop when `monthly_budget_usd` exceeded: before spending on a
+      turn, the orchestrator checks month-to-date cost; at/over the cap it
+      refuses with a spoken message and never calls the brain. Crossing
+      `warn_at_pct` appends a one-time spoken heads-up. 0 budget = no limit.
+      Built + unit-tested in the sandbox.
 - [ ] User-overrideable pricing via config (for when prices change).
 
 **Exit criterion:** User can run a 30-minute session and see real cost
