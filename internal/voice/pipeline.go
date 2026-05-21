@@ -79,7 +79,9 @@ func (p *Pipeline) Start(ctx context.Context, h Handler) error {
 			}
 			if stt.IsSilent(err) {
 				// User activated but didn't speak (or only background noise).
-				// Skip this turn without bothering the brain.
+				// Make the skip visible so the operator/user doesn't think
+				// the agent hung; the Captured cue already played above.
+				fmt.Println("(no se detectó voz; turno omitido)")
 				continue
 			}
 			return fmt.Errorf("stt: %w", err)

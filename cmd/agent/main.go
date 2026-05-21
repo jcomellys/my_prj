@@ -120,7 +120,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	fmt.Println("Agente listo. Escribe lo que quieras decir y presiona Enter. Ctrl-C para salir.")
+	fmt.Println("Agente listo. " + startupHint(prof.Activator) + " Ctrl-C para salir.")
 	runErr := make(chan error, 1)
 	activator.RunWithMainThread(func() {
 		runErr <- orch.Run(ctx)
@@ -285,6 +285,30 @@ func loadDotEnv(path string) {
 		if _, present := os.LookupEnv(key); !present {
 			_ = os.Setenv(key, val)
 		}
+	}
+}
+
+// startupHint returns an activation instruction that matches how the user
+// actually triggers a turn, so a voice/hotkey session never tells the user
+// to "press Enter".
+func startupHint(ac agent.ActivatorConfig) string {
+	switch ac.Kind {
+	case "hotkey":
+		combo := ac.Hotkey.Combo
+		if combo == "" {
+			combo = "ctrl+option+space"
+		}
+		return "Presiona " + combo + " y habla."
+	case "usb_presence":
+		name := ac.USB.VolumeName
+		if name == "" {
+			name = "AGENT"
+		}
+		return "Inserta el USB " + name + " y habla."
+	case "enter":
+		return "Presiona Enter y habla."
+	default: // stdin / always-on
+		return "Escribe lo que quieras decir y presiona Enter."
 	}
 }
 

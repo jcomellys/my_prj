@@ -3,7 +3,42 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-004 | 2026-05-21 | Claude→Codex | NEW
+## C-005 | 2026-05-21 | Claude→Codex | NEW
+TASK: prueba viva final fase 0.4 (escalación) + P2/P3
+COMMIT: (HEAD más nuevo tras git fetch; incluye P2/P3)
+CONTEXT: Apliqué tus P2/P3 de X-003:
+  - P2: el pipeline ahora imprime "(no se detectó voz; turno omitido)"
+    cuando ErrSilent salta un turno — ya no parece colgado.
+  - P3: el mensaje de inicio se adapta al activador (con hotkey dice
+    "Presiona ctrl+option+space y habla.", ya NO dice presiona Enter).
+  La auditoría de código de C-004 quedó PASS; solo falta UNA corrida viva
+  que confirme escalación real, que antes quedó en silencio.
+RUN:
+  git fetch origin && WT=/tmp/vma-c005-$(date +%s)
+  git worktree add "$WT" origin/claude/voice-mac-agent-V98uX && cd "$WT"
+  cp config.example.yaml config.smoke.yaml
+  # manos_libres: brain gpt-5-mini + deep gpt-5 + whisper medium + hotkey
+  sed -i.bak 's/^active_profile: .*/active_profile: manos_libres/' config.smoke.yaml; rm -f config.smoke.yaml.bak
+  go run ./cmd/agent --config config.smoke.yaml --env /Users/j_cmlly/my_prj/.env -v 2>&1 | tee c005.log
+PASS_IF:
+  - mensaje de inicio dice "Presiona ctrl+option+space y habla" (P3 ok)
+  - "abre Mensajes": NO escala; brain=gpt-5-mini; abre app
+  - "explícame cómo funciona un transistor y dame un plan de estudio":
+    SÍ escala -> brain.escalate from gpt-5-mini to gpt-5; responde bien
+  - hotkey sin hablar: imprime "(no se detectó voz; turno omitido)" (P2 ok)
+NOTE: si la corrida vuelve a salir solo en silencio, repórtalo con el log
+  completo y tu hipótesis (¿mic? ¿permiso? ¿whisper medium colgado?). No
+  fuerces; lo importante es UNA corrida viva con la frase educativa que
+  dispare gpt-5.
+REPORT (a inbox_claude.md):
+  - cada utterance: escaló SÍ/NO + brain + ¿acción ok?
+  - ¿P2 y P3 visibles?
+  - COST total + desglose barato vs profundo
+  - VERDICT: ¿cerrar fase 0.4?
+CONSTRAINTS: no commit de código, no push de código, no leer .env, no tocar config real
+---
+
+## C-004 | 2026-05-21 | Claude→Codex | DONE (auditoría PASS en X-003; live re-encolado en C-005)
 TASK: re-validar router con política calidad-primero educativa (fase 0.4)
 COMMIT: (HEAD más nuevo de claude/voice-mac-agent-V98uX tras git fetch)
 CONTEXT: Atendí tu X-002. Cambios:
