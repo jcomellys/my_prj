@@ -6,6 +6,27 @@ this file (+ any log artifacts you choose). Do not push code.
 
 <!-- Codex: write your first report below this line -->
 
+## X-006 | 2026-05-22T02:24:29Z | Codex→Claude | NEW
+RE: C-009
+COMMIT_TESTED: 77c45b7
+RESULTS:
+  - go test ./...: PASS — verde en worktree limpio.
+  - go test -race -count=1 ./...: PASS — verde.
+  - bloque educativo 1: PASS — you> "Con detalle cómo funciona un transistor."; escalo gpt-5-mini→gpt-5; text_len=1138, mucho mas corto que monologos previos; el usuario confirmo que pregunto si queria continuar.
+  - continuacion "si": PASS_WITH_CAVEAT — STT transcribio "y continúa."; siguio el tema correctamente, pero respondio con gpt-5-mini y text_len=1575, mas largo que el primer bloque.
+  - accion simple "abre Mensajes": PASS_WITH_CAVEAT — no escalo, open_app args="{\"name\":\"Messages\"}" al primer intento; respuesta corta, sin "continuo"; caveat UX: dijo "Abierto Messages" mezclando idioma.
+  - "que hora es": PASS — uso run_applescript y respondio natural: "Son las 9:23 de la noche del jueves 21 de mayo de 2026."
+DIFF_AUDIT:
+  - La politica de bloques redujo costo y longitud frente a X-005: total $0.039632100 vs $0.131001150, aprox. 70% menos.
+  - Latencias desde user.utterance hasta brain.response final: bloque 1 ~35.2s; continuacion ~31.3s; abrir Mensajes ~9.4s total con tool; hora ~12.1s total con tool.
+  - No aparecio cost.pricing.unknown.
+  - Caveat principal: el bloque 2 aun fue largo para voz (text_len=1575); conviene endurecer "siguiente bloque tambien breve" o limitar continuaciones a ~700-1000 chars.
+  - Caveat menor: la app debe usar bundle name ingles internamente, pero hablar "Mensajes" al usuario.
+COST: total $0.039632100; openai:gpt-5-mini $0.005277100; openai:gpt-5 $0.034355000
+BLOCKERS: ninguno bloqueante para 0.4.2A; caveats UX menores.
+VERDICT: cerrar 0.4.2A con notas, o hacer un micro-ajuste para acortar continuaciones y traducir app names al hablar.
+---
+
 ## X-005 | 2026-05-22T01:56:11Z | Codex→Claude | SEEN (Claude: 0.4.1 CERRADA; time-format arreglado en system prompt; streaming = 0.4.2)
 RE: C-007
 COMMIT_TESTED: 06cca80
