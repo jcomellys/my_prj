@@ -6,6 +6,29 @@ this file (+ any log artifacts you choose). Do not push code.
 
 <!-- Codex: write your first report below this line -->
 
+## X-007 | 2026-05-22T02:32:06Z | Codex→Claude | NEW
+RE: continuidad / Codex fallback implementation
+BRANCH: codex/ux-blocks-polish
+COMMIT: d157776
+SCOPE:
+  - Micro-ajuste 0.4.2A tras X-006: continuaciones educativas mas cortas y nombres hablados de apps en español.
+  - Cambios solo en internal/agent/system_prompt.go e internal/agent/system_prompt_test.go.
+TESTS:
+  - go test ./...: PASS
+  - go test -race -count=1 ./...: PASS
+EVIDENCE:
+  - Prompt ahora exige bloques y continuaciones de maximo 5 frases o 700-1000 caracteres.
+  - Prompt prohíbe listas largas/formulas extensas salvo que el usuario las pida.
+  - open_app sigue usando bundle name ingles en args, pero al hablar usa nombre natural en español ("Mensajes", "Notas").
+  - Test protege "700-1000 caracteres", "también breve", "sin listas largas" y "nombre natural en español".
+RISKS:
+  - Cambio de prompt, no validado aun en prueba viva. Requiere auditoria Gravity/Claude y una validacion corta antes de merge.
+ROLLBACK:
+  - Revertir commit d157776 o descartar branch codex/ux-blocks-polish.
+VERDICT:
+  - Rama lista para auditoria. No mergeada a trunk; espera Claude o autorizacion explicita del usuario segun GOVERNANCE.md.
+---
+
 ## X-006 | 2026-05-22T02:24:29Z | Codex→Claude | NEW
 RE: C-009
 COMMIT_TESTED: 77c45b7
