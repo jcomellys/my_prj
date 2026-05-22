@@ -184,13 +184,30 @@ uninterruptible monologue is real friction. Implemented:
       answer, press the hotkey mid-speech, confirm it stops <1s and is
       ready to listen again.
 
-## Fase 0.4.2 — Streaming TTS (next, deferred per decision)
+## Fase 0.4.2A — Bounded answers in blocks  ✅ code done (live validation pending)
+
+Cheap win before real streaming, recommended by Codex after X-005 showed
+31.9s and 88.4s educational answers. Pure system-prompt policy, no
+Brain/TTS redesign:
+
+- [x] System prompt "Respuestas largas (voz, por bloques)": for
+      explanations/teaching/analysis/study-plans, give a brief first
+      block (max 5-7 sentences, ~45s spoken) and end by asking whether to
+      continue/deepen; continue in the next turn if the user says yes.
+      Simple actions stay one-sentence. Cuts both perceived latency AND
+      cost (a bounded block uses far fewer output tokens than an 88s
+      monologue).
+- [x] Regression test: prompt must contain the block policy markers.
+- [ ] Live validation (C-009): ask for a long explanation; the agent
+      should give a short block and ask whether to continue, then
+      continue on "sí".
+
+## Fase 0.4.2B — Streaming TTS (deferred)
 
 - [ ] Stream the reply to TTS sentence-by-sentence so the user hears the
       first sentence while the rest generates (cuts perceived latency on
-      slow deep-brain answers). NOT in 0.4.1 scope; no Brain.ChatStream
-      redesign yet.
-- [ ] Optional: a spoken "¿sigo?" checkpoint on very long answers.
+      slow deep-brain answers). Needs a Brain.ChatStream variant + a
+      pipeline that pipes blocks to TTS; bigger change, kept separate.
 
 ## Fase 1 — Realtime voice as premium option
 

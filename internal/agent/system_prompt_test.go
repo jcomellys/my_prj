@@ -33,6 +33,9 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"current date",
 		// Fase 0.4: English bundle names for open_app (localization fix).
 		"Messages",
+		// Fase 0.4.2A: bounded long answers in blocks.
+		"por bloques",
+		"¿Quieres que continúe?",
 	}
 	for _, s := range required {
 		if !strings.Contains(strings.ToLower(DefaultSystemPrompt), strings.ToLower(s)) {
