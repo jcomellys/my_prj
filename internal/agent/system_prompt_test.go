@@ -33,8 +33,13 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"current date",
 		// Fase 0.4: English bundle names for open_app (localization fix).
 		"Messages",
+		"nombre natural en español",
+		"Mensajes",
 		// Fase 0.4.2A: bounded long answers in blocks.
 		"por bloques",
+		"700-1000 caracteres",
+		"también breve",
+		"sin listas largas",
 		"¿Quieres que continúe?",
 	}
 	for _, s := range required {
