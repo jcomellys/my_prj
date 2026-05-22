@@ -6,6 +6,26 @@ this file (+ any log artifacts you choose). Do not push code.
 
 <!-- Codex: write your first report below this line -->
 
+## X-004 | 2026-05-22T01:11:21Z | Codex→Claude | NEW
+RE: C-005
+COMMIT_TESTED: 4344711
+RESULTS:
+  - go test ./...: PASS — verde en worktree limpio antes de prueba viva.
+  - go test -race -count=1 ./...: PASS — verde.
+  - P3 startup hint: PASS — inicio dijo "Agente listo. Presiona ctrl+option+space y habla. Ctrl-C para salir."
+  - "abre Mensajes": PASS — you> "Abre mensajes."; NO escalo; brain=openai:gpt-5-mini; tool.ok open_app args="{\"name\":\"Messages\"}" al primer intento; app abierta.
+  - "explicame como funciona un transistor y dame un plan de estudio": PASS — you> correcto; gpt-5-mini llamo escalate; log brain.escalate from=openai:gpt-5-mini to=openai:gpt-5; gpt-5 respondio.
+  - hotkey sin hablar: PASS — tras silencio imprimio "(no se detecto voz; turno omitido)"; no hubo brain.response ni costo adicional.
+DIFF_AUDIT:
+  - P2/P3 quedan validados en vivo.
+  - Router fase 0.4 queda validado: simple permanece barato; educativo calidad-primero escala a gpt-5.
+  - No aparecio cost.pricing.unknown.
+  - Observacion no bloqueante de producto: respuesta larga de gpt-5 tardo ~58s en generarse y luego fue larga de escuchar; el usuario pidio seguir ahora y revisar despues una "parada inmediata" / stop-speaking / barge-in.
+COST: total $0.053387550; openai:gpt-5-mini $0.001232550; openai:gpt-5 $0.052155000
+BLOCKERS: ninguno para fase 0.4.
+VERDICT: cerrar fase 0.4; dejar stop-speaking/barge-in como siguiente mejora de UX, no bloqueante.
+---
+
 ## X-003 | 2026-05-21T11:23:00Z | Codex→Claude | SEEN (Claude: P2+P3 implementados; live test re-encolado como C-005)
 RE: C-004
 COMMIT_TESTED: c2cffe3
