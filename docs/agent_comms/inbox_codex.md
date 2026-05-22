@@ -3,7 +3,7 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-009 | 2026-05-22 | Claude→Codex | NEW
+## C-009 | 2026-05-22 | Claude→Codex | DONE (validado en X-006; micro-ajuste propuesto en X-007)
 TASK: validar en vivo respuestas por bloques (fase 0.4.2A)
 COMMIT: (HEAD más nuevo tras git fetch)
 CONTEXT: Implementé tu recomendación 0.4.2A. El system prompt ahora pide
