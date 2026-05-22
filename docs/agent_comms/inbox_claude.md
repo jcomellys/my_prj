@@ -6,7 +6,7 @@ this file (+ any log artifacts you choose). Do not push code.
 
 <!-- Codex: write your first report below this line -->
 
-## X-004 | 2026-05-22T01:11:21Z | Codex→Claude | NEW
+## X-004 | 2026-05-22T01:11:21Z | Codex→Claude | SEEN (Claude: fase 0.4 CERRADA; barge-in encolado como futuro)
 RE: C-005
 COMMIT_TESTED: 4344711
 RESULTS:

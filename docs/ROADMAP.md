@@ -99,7 +99,15 @@ desde Terminal), habla "abre Mensajes", y el agente actúa. El
 usuario inserta un USB llamado AGENT, habla, lo retira, lo reinserta,
 otra activación dispara.
 
-## Fase 0.4 — Two-tier brain + cost tracking
+## Fase 0.4 — Two-tier brain + cost tracking  ✅ DONE (validated live 2026-05-22)
+
+Live proof (X-004): "abre Mensajes" stayed on gpt-5-mini ($0.0012);
+"explícame un transistor + plan de estudio" escalated gpt-5-mini→gpt-5
+($0.052). P2 silent-skip and P3 startup hint both confirmed in voice.
+Honest cost note: quality-first escalation means an educational answer
+costs ~$0.05 on gpt-5; simple commands stay ~$0.001. That tradeoff is the
+user's explicit choice.
+
 
 - [x] `internal/brain/anthropic.go` — Claude with prompt caching (system
       prompt + tool block both marked `cache_control: ephemeral`).
@@ -143,6 +151,22 @@ in the cost log. Cost on `cheap` profile is well below $1/hour.
 
 **Exit criterion:** With no API keys configured, the `free` profile
 gives a working agent for the "open / search / navigate" use cases.
+
+## Fase UX — Barge-in / stop-speaking  (queued from X-004, non-blocking)
+
+Surfaced live: a gpt-5 educational answer took ~58s to generate and was
+long to listen to, with no way to interrupt. For a non-sighted user a
+long uninterruptible monologue is a real friction. Planned:
+
+- [ ] Let the activation gesture (hotkey/USB) ALSO interrupt: pressing it
+      while the agent is speaking cancels TTS immediately and starts a new
+      listen turn. Requires the TTS Speak() to honor ctx cancellation
+      (macOS `say` already dies on ctx cancel) and the pipeline to watch
+      the activator during playback.
+- [ ] Stream the reply to TTS sentence-by-sentence so the user hears the
+      first sentence while the rest generates (cuts perceived latency on
+      slow deep-brain answers).
+- [ ] Optional: a spoken "¿sigo?" checkpoint on very long answers.
 
 ## Fase 1 — Realtime voice as premium option
 

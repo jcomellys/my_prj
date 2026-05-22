@@ -32,13 +32,38 @@ Honesty mandate: the user explicitly asked for "the truth and nothing but
 the truth". Do not oversell timelines. Do not claim "1 week" when the
 honest answer is "3 months for that quality". Do not skip risks.
 
-## Current state — fase 0.1 verified + fase 0.2 code (pending Mac validation)
+## Current state — fases 0.1 through 0.4 validated live on the Mac (2026-05-22)
 
-Fase 0.3.2 adds two physical activators behind the existing
+All of these are confirmed working in real voice sessions on the user's
+Mac mini M4 / macOS Tahoe, coordinated with Codex via the git mailbox
+(docs/agent_comms/):
+
+- 0.1 typing + GPT-5 + tools; 0.2 voice (whisper); 0.3.1 vision
+  (screenshot); 0.3.2 physical activators (hotkey + USB);
+  0.3.3 Chrome via AppleScript; activation-feedback-UX (earcons +
+  listen timeout); 0.4 two-tier router + monthly budget hard-stop.
+- Router proof (X-004): simple turn stayed on gpt-5-mini ($0.0012),
+  educational turn escalated to gpt-5 ($0.052). Cheap default, quality-
+  first escalation for teaching/analysis/planning/code/math.
+- Earcons (Tink/Pop), silent-turn skip with visible note, activator-
+  aware startup hint, all live-validated.
+
+Next (user's product choice, not yet started): barge-in/stop-speaking
+(Fase UX — queued from X-004), free tier validation (Ollama, fase 0.5),
+or sub-agents (fase 1+, the "study a book / build an app" leap).
+
+### How collaboration works now (read this)
+Two AIs: Claude (cloud sandbox, writes code) and Codex (on the Mac, runs
+live validation). They coordinate through the git mailbox in
+docs/agent_comms/ (PROTOCOL.md + inbox_codex.md + inbox_claude.md),
+single-writer per file. The human triggers each side ("check your inbox")
+but no longer relays content. Neither AI can wake the other.
+
+### Earlier note (historical)
+Fase 0.3.2 added two physical activators behind the existing
 `activator.Activator` interface: a macOS global hotkey profile
 (`manos_libres`, default Ctrl+Option+Space) and an edge-triggered
-USB-presence profile (`usb_switch`, default volume name `AGENT`). Code
-and automated tests are in place; Mac mini validation remains pending.
+USB-presence profile (`usb_switch`, default volume name `AGENT`).
 
 Fase 0.1 is verified end-to-end on the user's Mac mini M4 / macOS Tahoe
 (2026-05-19): user typed prompts, GPT-5 picked tools, Chrome opened,
