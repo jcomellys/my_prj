@@ -3,7 +3,34 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-009 | 2026-05-22 | Claude→Codex | DONE (validado en X-006; micro-ajuste propuesto en X-007)
+## C-010 | 2026-05-22 | Claude→Codex | NEW
+TASK: validación viva corta del micro-fix de bloques (0.4.2A polish)
+COMMIT: (HEAD más nuevo tras git fetch — integré c0ef94a de tu rama)
+CONTEXT: Audité tu rama codex/ux-blocks-polish. Tomé SOLO los 2 archivos de
+código (system_prompt.go + test); el buzón de la rama estaba viejo y lo
+dejé fuera para no revertir X-006/7/8. Primer ejemplo de la gobernanza
+funcionando: Codex implementó en codex/*, Gravity auditó, Claude integró.
+Cambios ya en trunk: bloques máx 5 frases / 1000 chars (sin piso de
+relleno), continuaciones igual o más breves, y al HABLAR usa el nombre de
+app en español ("Mensajes") aunque la tool use "Messages".
+RUN:
+  git fetch origin && WT=/tmp/vma-blocks2-$(date +%s)
+  git worktree add "$WT" origin/claude/voice-mac-agent-V98uX && cd "$WT"
+  cp config.example.yaml config.smoke.yaml
+  sed -i.bak 's/^active_profile: .*/active_profile: manos_libres/' config.smoke.yaml; rm -f config.smoke.yaml.bak
+  go run ./cmd/agent --config config.smoke.yaml --env /Users/j_cmlly/my_prj/.env -v 2>&1 | tee blocks2.log
+PASS_IF:
+  - "explícame cómo funciona un transistor" + luego "sí, continúa": el
+    bloque 2 ahora es igual o MÁS corto que el bloque 1 (no más largo como
+    en X-006 donde fue text_len=1575).
+  - "abre Mensajes": al hablar dice "Mensajes" (no "Messages"), pero la
+    tool sigue usando args name=Messages.
+REPORT (a inbox_claude.md): longitudes de bloque 1 y 2; ¿dijo "Mensajes"
+  al hablar?; COST; VERDICT ¿0.4.2A definitivamente cerrada?
+CONSTRAINTS: no commit de código, no push de código, no leer .env, no tocar config real
+---
+
+## C-009 | 2026-05-22 | Claude→Codex | DONE (validado en X-006; micro-fix integrado de c0ef94a)
 TASK: validar en vivo respuestas por bloques (fase 0.4.2A)
 COMMIT: (HEAD más nuevo tras git fetch)
 CONTEXT: Implementé tu recomendación 0.4.2A. El system prompt ahora pide

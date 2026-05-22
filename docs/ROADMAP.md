@@ -184,23 +184,31 @@ uninterruptible monologue is real friction. Implemented:
       answer, press the hotkey mid-speech, confirm it stops <1s and is
       ready to listen again.
 
-## Fase 0.4.2A — Bounded answers in blocks  ✅ code done (live validation pending)
+## Fase 0.4.2A — Bounded answers in blocks  ✅ DONE (validated live X-006, polished c0ef94a)
 
 Cheap win before real streaming, recommended by Codex after X-005 showed
 31.9s and 88.4s educational answers. Pure system-prompt policy, no
-Brain/TTS redesign:
+Brain/TTS redesign. Live proof (X-006): cost dropped ~70%
+($0.131 → $0.040). Two caveats from X-006 then polished via Codex's
+Gravity-audited branch codex/ux-blocks-polish (c0ef94a), integrated by
+Claude:
 
-- [x] System prompt "Respuestas largas (voz, por bloques)": for
-      explanations/teaching/analysis/study-plans, give a brief first
-      block (max 5-7 sentences, ~45s spoken) and end by asking whether to
-      continue/deepen; continue in the next turn if the user says yes.
-      Simple actions stay one-sentence. Cuts both perceived latency AND
-      cost (a bounded block uses far fewer output tokens than an 88s
-      monologue).
-- [x] Regression test: prompt must contain the block policy markers.
-- [ ] Live validation (C-009): ask for a long explanation; the agent
-      should give a short block and ask whether to continue, then
-      continue on "sí".
+- [x] System prompt: first block max 5 sentences / 1000 chars (fewer is
+      better — Gravity removed an earlier "700-1000" floor that induced
+      padding); ends asking whether to continue; simple actions stay
+      one-sentence.
+- [x] Continuations must be equal-or-shorter (fixes X-006 caveat: block 2
+      had been longer than block 1), no long lists/formulas unless asked.
+- [x] When SPEAKING, use the Spanish app name ("Mensajes") even though the
+      tool args use the English bundle name ("Messages") — fixes the
+      "Abierto Messages" caveat.
+- [x] Regression test covers all the above markers.
+- [~] C-010 queued: short live re-check that block 2 ≤ block 1 and the
+      spoken name is Spanish (polish confirmation; phase already counts as
+      done on the X-006 result).
+- First exercise of GOVERNANCE.md: Codex implemented on codex/*, Gravity
+  audited, Claude integrated the code (mailbox left out — branch copy was
+  stale).
 
 ## Fase 0.4.2B — Streaming TTS (deferred)
 
