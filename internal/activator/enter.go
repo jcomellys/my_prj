@@ -50,3 +50,6 @@ func (e *Enter) WaitForActivation(ctx context.Context) error {
 		return r.err
 	}
 }
+
+// SupportsBargeIn: pressing Enter is a discrete gesture usable to interrupt.
+func (*Enter) SupportsBargeIn() bool { return true }

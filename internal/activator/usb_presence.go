@@ -109,3 +109,7 @@ func (u *USBPresence) present() bool {
 	}
 	return false
 }
+
+// SupportsBargeIn: removing+reinserting a USB mid-speech is awkward, so USB
+// presence does not drive barge-in for now.
+func (*USBPresence) SupportsBargeIn() bool { return false }

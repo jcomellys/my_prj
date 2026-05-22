@@ -28,3 +28,6 @@ func (h *Hotkey) WaitForActivation(ctx context.Context) error {
 // RunWithMainThread on non-darwin just calls loop directly — no main
 // thread routing needed.
 func RunWithMainThread(loop func()) { loop() }
+
+// SupportsBargeIn matches the darwin implementation for interface parity.
+func (*Hotkey) SupportsBargeIn() bool { return true }

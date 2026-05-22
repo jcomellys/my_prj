@@ -152,20 +152,36 @@ in the cost log. Cost on `cheap` profile is well below $1/hour.
 **Exit criterion:** With no API keys configured, the `free` profile
 gives a working agent for the "open / search / navigate" use cases.
 
-## Fase UX — Barge-in / stop-speaking  (queued from X-004, non-blocking)
+## Fase 0.4.1 — Barge-in / stop-speaking  ✅ code done (live validation pending)
 
-Surfaced live: a gpt-5 educational answer took ~58s to generate and was
-long to listen to, with no way to interrupt. For a non-sighted user a
-long uninterruptible monologue is a real friction. Planned:
+Surfaced live (X-004): a gpt-5 educational answer took ~58s and was long
+to listen to, with no way to interrupt. For a non-sighted user a long
+uninterruptible monologue is real friction. Implemented:
 
-- [ ] Let the activation gesture (hotkey/USB) ALSO interrupt: pressing it
-      while the agent is speaking cancels TTS immediately and starts a new
-      listen turn. Requires the TTS Speak() to honor ctx cancellation
-      (macOS `say` already dies on ctx cancel) and the pipeline to watch
-      the activator during playback.
+- [x] The activation gesture interrupts: while the agent is thinking OR
+      speaking, one hotkey/Enter press cancels the in-flight brain call
+      and/or the TTS within ~1s and the loop returns to listening without
+      exiting. Implemented in voice.Pipeline.processTurn via a single
+      barge watcher + context cancellation. Only our own processes are
+      cancelled (macOS `say` dies on ctx cancel) — no killall.
+- [x] The interrupting gesture doubles as the next turn's activation
+      (skipActivation), so it's one press to "cut and talk".
+- [x] Activator.SupportsBargeIn() gates the behavior: true for hotkey and
+      Enter; false for always-on (returns immediately) and USB presence
+      (awkward to repeat mid-speech) to avoid false triggers.
+- [x] Structured log `voice.barge_in` with phase=thinking|speaking.
+- [x] Test: barge-in cuts a blocking TTS and the pipeline relistens
+      without exiting (internal/voice/pipeline_test.go).
+- [ ] Live validation on the Mac (queued as C-006): ask for a long
+      answer, press the hotkey mid-speech, confirm it stops <1s and is
+      ready to listen again.
+
+## Fase 0.4.2 — Streaming TTS (next, deferred per decision)
+
 - [ ] Stream the reply to TTS sentence-by-sentence so the user hears the
       first sentence while the rest generates (cuts perceived latency on
-      slow deep-brain answers).
+      slow deep-brain answers). NOT in 0.4.1 scope; no Brain.ChatStream
+      redesign yet.
 - [ ] Optional: a spoken "¿sigo?" checkpoint on very long answers.
 
 ## Fase 1 — Realtime voice as premium option

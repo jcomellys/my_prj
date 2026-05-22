@@ -15,4 +15,12 @@ type Activator interface {
 	// WaitForActivation blocks until the user signals readiness to talk.
 	// Returns ctx.Err() if cancelled.
 	WaitForActivation(ctx context.Context) error
+
+	// SupportsBargeIn reports whether this activator can be used to interrupt
+	// the agent while it is thinking or speaking. True only for activators
+	// whose WaitForActivation genuinely blocks on a discrete user gesture
+	// (hotkey, Enter). Activators that return immediately (always-on) or
+	// whose gesture is awkward to repeat mid-speech (USB insert) return false,
+	// so the voice loop won't false-trigger a barge-in.
+	SupportsBargeIn() bool
 }

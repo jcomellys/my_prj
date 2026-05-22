@@ -117,3 +117,6 @@ func parseCombo(combo string) ([]hotkey.Modifier, hotkey.Key, error) {
 func RunWithMainThread(loop func()) {
 	mainthread.Init(loop)
 }
+
+// SupportsBargeIn: a global hotkey is the canonical interrupt gesture.
+func (*Hotkey) SupportsBargeIn() bool { return true }

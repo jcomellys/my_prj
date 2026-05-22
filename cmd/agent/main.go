@@ -88,7 +88,7 @@ func main() {
 	log.Info("tools.registered", "count", len(registry.Specs()))
 
 	// --- Voice (STT + TTS + Activator) --------------------------------------
-	v, err := buildVoice(prof.Voice, prof.Activator)
+	v, err := buildVoice(prof.Voice, prof.Activator, log)
 	if err != nil {
 		fatal(log, err)
 	}
@@ -165,7 +165,7 @@ func buildBrain(c agent.BrainConfig) (brain.Brain, error) {
 	}
 }
 
-func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider, error) {
+func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig, log *slog.Logger) (voice.Provider, error) {
 	if vc.Mode != "" && vc.Mode != "pipeline" {
 		return nil, fmt.Errorf("voice.mode=%q not yet supported (only pipeline in fase 0.1)", vc.Mode)
 	}
@@ -253,7 +253,7 @@ func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig) (voice.Provider,
 	}
 	cues := audiocue.New(cuesOn, vc.Cues.ListeningSound, vc.Cues.CapturedSound)
 
-	return voice.NewPipeline(sttImpl, ttsImpl, actImpl).WithCues(cues), nil
+	return voice.NewPipeline(sttImpl, ttsImpl, actImpl).WithCues(cues).WithLogger(log), nil
 }
 
 // loadDotEnv parses a minimal KEY=VALUE .env file (no quotes/escapes) and

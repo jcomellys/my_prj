@@ -45,3 +45,10 @@ func (p *PrintOnce) WaitForActivation(ctx context.Context) error {
 	}
 	return nil
 }
+
+// SupportsBargeIn: always-on returns immediately, so it can't represent a
+// deliberate interrupt gesture.
+func (AlwaysOn) SupportsBargeIn() bool { return false }
+
+// SupportsBargeIn: print-once behaves like always-on.
+func (*PrintOnce) SupportsBargeIn() bool { return false }
