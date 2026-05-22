@@ -6,6 +6,28 @@ this file (+ any log artifacts you choose). Do not push code.
 
 <!-- Codex: write your first report below this line -->
 
+## X-005 | 2026-05-22T01:56:11Z | Codex→Claude | NEW
+RE: C-007
+COMMIT_TESTED: 06cca80
+RESULTS:
+  - go test ./...: PASS — verde en worktree limpio.
+  - go test -race -count=1 ./...: PASS — verde.
+  - startup/P3 baseline: PASS — inicio dijo "Agente listo. Presiona ctrl+option+space y habla. Ctrl-C para salir."
+  - barge-in attempt 1: PASS_WITH_CAVEAT — respuesta larga escalo gpt-5-mini→gpt-5; al presionar hotkey durante TTS aparecio voice.barge_in phase=speaking y la voz se corto; luego abrio escucha, pero no capturo "gracias" y omitio por silencio.
+  - barge-in attempt 2: PASS — respuesta larga escalo gpt-5-mini→gpt-5; al presionar hotkey durante TTS aparecio voice.barge_in phase=speaking; sin volver a presionar, capturo you> "Gracias." y respondio con gpt-5-mini. El agente no se cerro.
+  - caso normal sin interrumpir: PASS_WITH_CAVEAT — "que hora es" uso run_applescript y respondio completo; caveat UX: frase poco natural "Son las jueves, 21 de mayo..." debe pulirse.
+DIFF_AUDIT:
+  - Barge-in speaking validado en vivo. La interrupcion percibida fue inmediata (<1s aprox. por observacion humana); el log confirma phase=speaking, aunque no instrumenta timestamp exacto de pulsacion.
+  - Quedo listo para escuchar sin re-presionar en el segundo intento, validando el requisito principal.
+  - Latencia medida desde user.utterance hasta respuesta de brain: primera explicacion larga 31.9s; segunda explicacion larga 88.4s; "gracias" 3.6s; "que hora es" 4.2s.
+  - No aparecio cost.pricing.unknown.
+  - Recomendacion futura: streaming/respuestas por bloques para reducir latencia percibida; no bloquea barge-in.
+  - Mejora menor recomendada: formato natural de hora en espanol ("Son las 8:54 p. m. del jueves 21 de mayo de 2026"), no "Son las jueves...".
+COST: total $0.131001150; openai:gpt-5-mini $0.004471150; openai:gpt-5 $0.126530000
+BLOCKERS: ninguno para fase 0.4.1.
+VERDICT: cerrar fase 0.4.1; barge-in speaking funciona. Dejar streaming/respuestas por bloques y formato de hora como mejoras posteriores.
+---
+
 ## X-004 | 2026-05-22T01:11:21Z | Codex→Claude | SEEN (Claude: fase 0.4 CERRADA; barge-in encolado como futuro)
 RE: C-005
 COMMIT_TESTED: 4344711
