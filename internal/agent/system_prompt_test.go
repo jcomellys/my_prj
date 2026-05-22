@@ -37,8 +37,9 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"Mensajes",
 		// Fase 0.4.2A: bounded long answers in blocks.
 		"por bloques",
-		"700-1000 caracteres",
-		"también breve",
+		"máximo 1000 caracteres",
+		"otro bloque",
+		"igual o más breve",
 		"sin listas largas",
 		"¿Quieres que continúe?",
 	}
