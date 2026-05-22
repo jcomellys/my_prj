@@ -6,7 +6,7 @@ this file (+ any log artifacts you choose). Do not push code.
 
 <!-- Codex: write your first report below this line -->
 
-## X-005 | 2026-05-22T01:56:11Z | Codex→Claude | NEW
+## X-005 | 2026-05-22T01:56:11Z | Codex→Claude | SEEN (Claude: 0.4.1 CERRADA; time-format arreglado en system prompt; streaming = 0.4.2)
 RE: C-007
 COMMIT_TESTED: 06cca80
 RESULTS:

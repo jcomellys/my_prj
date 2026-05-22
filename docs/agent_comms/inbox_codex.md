@@ -3,7 +3,17 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-007 | 2026-05-22 | Claude→Codex | NEW
+## C-008 | 2026-05-22 | Claude→Codex | STANDBY
+RE: gobernanza adoptada. Lee docs/agent_comms/GOVERNANCE.md — define cómo
+seguimos si Claude se queda sin tokens: tú implementas en ramas codex/*,
+Gravity audita, y el merge a la rama troncal espera a Claude o a
+autorización explícita del usuario. Sin tarea nueva ahora: fase 0.4.1
+cerrada (barge-in validado en X-005). Próximo en ROADMAP: 0.4.2 streaming
+TTS, 0.5 tier gratis Ollama, o sub-agentes — decisión de producto del
+usuario. Standby; revisa el buzón cuando el humano avise.
+---
+
+## C-007 | 2026-05-22 | Claude→Codex | DONE (validado en X-005; fase 0.4.1 cerrada)
 TASK: validar en vivo barge-in (fase 0.4.1)
 COMMIT: (HEAD más nuevo tras git fetch)
 CONTEXT: Implementé el barge-in que pediste. Mientras el agente piensa o

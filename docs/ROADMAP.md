@@ -152,7 +152,15 @@ in the cost log. Cost on `cheap` profile is well below $1/hour.
 **Exit criterion:** With no API keys configured, the `free` profile
 gives a working agent for the "open / search / navigate" use cases.
 
-## Fase 0.4.1 — Barge-in / stop-speaking  ✅ code done (live validation pending)
+## Fase 0.4.1 — Barge-in / stop-speaking  ✅ DONE (validated live 2026-05-22, X-005)
+
+Live proof: a long gpt-5 answer was cut <1s by a hotkey press mid-speech;
+`voice.barge_in phase=speaking` logged; the agent stayed alive and was
+ready to listen again WITHOUT re-pressing (one gesture = cut and talk).
+Normal (non-interrupted) replies still play fully. Open follow-ups (non-
+blocking): streaming for perceived latency (0.4.2); natural Spanish time
+phrasing (fixed in system prompt — was "Son las jueves...").
+
 
 Surfaced live (X-004): a gpt-5 educational answer took ~58s and was long
 to listen to, with no way to interrupt. For a non-sighted user a long

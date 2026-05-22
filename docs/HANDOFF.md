@@ -59,6 +59,12 @@ docs/agent_comms/ (PROTOCOL.md + inbox_codex.md + inbox_claude.md),
 single-writer per file. The human triggers each side ("check your inbox")
 but no longer relays content. Neither AI can wake the other.
 
+Continuity when Claude is out of tokens is governed by
+docs/agent_comms/GOVERNANCE.md: Codex may implement on `codex/*` branches,
+Gravity (external auditor) reviews, and the merge to the trunk branch
+waits for Claude OR explicit user authorization. Read GOVERNANCE.md
+before implementing as a fallback engine.
+
 ### Earlier note (historical)
 Fase 0.3.2 added two physical activators behind the existing
 `activator.Activator` interface: a macOS global hotkey profile
