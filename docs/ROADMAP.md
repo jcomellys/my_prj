@@ -137,20 +137,28 @@ user's explicit choice.
 **Exit criterion:** User can run a 30-minute session and see real cost
 in the cost log. Cost on `cheap` profile is well below $1/hour.
 
-## Fase 0.5 — Free tier complete (Ollama)
+## Fase 0.5 — Free tier (Ollama)  — IN PROGRESS (bounded scope, user decision)
+
+The humanitarian promise: a fully-local $0 option for users who can't pay
+for an API. Ollama brain is already implemented. This phase is
+deliberately SHORT — if local quality isn't enough, document it as an
+experimental tier and move on to sub-agents (do NOT let it sprawl).
 
 - [x] `internal/brain/ollama.go` — local LLM via Ollama HTTP API with
-      tool calling support.
-- [ ] Verify Llama 3.3 8B can reliably invoke `open_app` and a
-      handful of AppleScript-based tools on M4 (needs Mac mini test).
-- [ ] Document tradeoff: local models are slower and weaker; the user
-      should not expect "abre Word y escribe un ensayo sobre Newton"
-      to work perfectly on local. Simple control: yes. Heavy
-      reasoning: escalate.
-- [ ] Update the `free` profile to use Ollama by default.
+      tool calling. Cost pricing returns $0 for `ollama:*`.
+- [x] `free` profile rewritten as a real local voice tier: whisper.cpp
+      small + Ollama (qwen2.5:7b, alt llama3.1:8b) + macOS say + cues +
+      hotkey. No deep/paid escalation. Regression test
+      TestExampleConfig_FreeTierIsLocalAndFree guards it.
+- [ ] Live validation (C-011) on the Mac, bounded checklist:
+      simple commands, open apps, time, ONE short educational answer,
+      and an honest list of what local does NOT do well.
+- [ ] Document the result: production-ready free tier OR experimental.
 
-**Exit criterion:** With no API keys configured, the `free` profile
-gives a working agent for the "open / search / navigate" use cases.
+**Exit criterion:** With no API keys, the `free` profile gives a working
+agent for "open / time / navigate / short answer". If qwen2.5:7b can't
+reliably call tools in Spanish, we label it experimental and proceed to
+sub-agents — this phase must not become long.
 
 ## Fase 0.4.1 — Barge-in / stop-speaking  ✅ DONE (validated live 2026-05-22, X-005)
 

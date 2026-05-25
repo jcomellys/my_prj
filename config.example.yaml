@@ -5,24 +5,44 @@ active_profile: free
 
 profiles:
 
-  # Tier 0 — fully local, $0 cost.
-  # Brain runs on your Mac via Ollama. STT/TTS local.
+  # Tier 0 — fully local, $0 cost. Everything runs on the Mac: STT
+  # (whisper.cpp), brain (Ollama), TTS (macOS say). No API key, no spend.
+  # Prerequisites:
+  #   brew install ollama && ollama serve   (in another terminal)
+  #   ollama pull qwen2.5:7b                 (~4.7 GB; good Spanish + tool calling)
+  #   brew install sox whisper-cpp           (already installed if you ran voice)
+  #   ~/.whisper-models/ggml-small.bin
+  # Honest expectation: a 7B local model is far weaker than GPT-5. It handles
+  # simple commands (open apps, time, navigate) well; deep educational answers
+  # will be basic. This is the no-cost accessibility tier, not the premium one.
   free:
     voice:
       mode: pipeline
       stt:
-        provider: stdin      # placeholder until whisper.cpp is wired in fase 0.2
+        provider: whisper_cpp
+        whisper:
+          model_path: ~/.whisper-models/ggml-small.bin
+          language: es
+          silence_seconds: 1.5
+          threshold: "3%"
+          min_duration_seconds: 0.30
+          leading_pad_seconds: 0.50
+          trailing_pad_seconds: 0.20
+          max_listen_seconds: 10
       tts:
-        provider: macos_say  # native macOS voices (Tahoe has excellent ones)
-        voice: ""            # empty = system default. Try "Mónica" (es) or "Samantha" (en)
-        rate: 200            # words per minute
+        provider: macos_say
+        voice: ""            # empty = system default. Try "Mónica" (es)
+      cues:
+        enabled: true
     brain:
       provider: ollama
-      model: llama3.3:8b     # cabe holgado en M4. Cambiar a qwen2.5:14b para mejor razonamiento
-      temperature: 0.3
+      model: qwen2.5:7b      # alt: llama3.1:8b. Both support tool calling.
+      temperature: 0.2
       max_tokens: 2048
     activator:
-      kind: stdin            # press Enter to activate. hotkey global llega en fase 0.3
+      kind: hotkey
+      hotkey:
+        combo: "ctrl+option+space"
 
   # Tier 1 — cheap cloud brain, local audio.
   cheap:

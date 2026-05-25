@@ -75,6 +75,35 @@ tools:
 	}
 }
 
+// TestExampleConfig_FreeTierIsLocalAndFree guards the humanitarian promise:
+// the `free` profile must run fully local (Ollama brain, whisper STT, no
+// paid escalation) so a user without money still gets a working agent.
+func TestExampleConfig_FreeTierIsLocalAndFree(t *testing.T) {
+	cfg, err := LoadConfig("../../config.example.yaml")
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	p, ok := cfg.Profiles["free"]
+	if !ok {
+		t.Fatal("free profile missing")
+	}
+	if p.Brain.Provider != "ollama" {
+		t.Errorf("free brain must be ollama (local), got %q", p.Brain.Provider)
+	}
+	if p.Brain.Deep != nil {
+		t.Error("free tier must NOT have a paid deep/escalation brain")
+	}
+	if p.Voice.STT.Provider != "whisper_cpp" {
+		t.Errorf("free STT must be local whisper_cpp, got %q", p.Voice.STT.Provider)
+	}
+	if p.Voice.STT.Whisper.MaxListenSeconds <= 0 {
+		t.Error("free profile must cap the listen window (anti-hang)")
+	}
+	if p.Voice.Cues.Enabled == nil || !*p.Voice.Cues.Enabled {
+		t.Error("free profile should have accessibility cues on")
+	}
+}
+
 func TestLoadConfig_MissingActiveProfileErrors(t *testing.T) {
 	path := writeTemp(t, `
 active_profile: ghost

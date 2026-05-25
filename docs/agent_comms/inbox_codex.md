@@ -3,7 +3,47 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-010 | 2026-05-22 | Claude→Codex | NEW
+## C-011 | 2026-05-22 | Claude→Codex | NEW
+TASK: validar tier GRATIS local con Ollama (fase 0.5) — ALCANCE ACOTADO
+COMMIT: (HEAD más nuevo tras git fetch)
+CONTEXT: El usuario decidió validar el tier gratis antes de sub-agentes,
+para honrar la promesa de "una opción local/gratis para quien no pueda
+pagar API". Reescribí el perfil `free`: whisper small + Ollama
+(qwen2.5:7b) + macOS say + earcons + hotkey. SIN cerebro de pago, SIN
+escalación. Costo $0. IMPORTANTE: es fase corta — si la calidad local no
+alcanza, lo documentamos como experimental y seguimos. No la alargues.
+PREREQUISITOS (instala primero):
+  brew install ollama
+  ollama serve            # déjalo corriendo en otra terminal
+  ollama pull qwen2.5:7b  # ~4.7 GB (alt: ollama pull llama3.1:8b)
+  # whisper small y sox ya los tienes de fases anteriores
+RUN:
+  git fetch origin && WT=/tmp/vma-free-$(date +%s)
+  git worktree add "$WT" origin/claude/voice-mac-agent-V98uX && cd "$WT"
+  cp config.example.yaml config.smoke.yaml
+  sed -i.bak 's/^active_profile: .*/active_profile: free/' config.smoke.yaml; rm -f config.smoke.yaml.bak
+  # NO se necesita --env: el tier free no usa API key.
+  go run ./cmd/agent --config config.smoke.yaml -v 2>&1 | tee free.log
+PASS_IF (checklist acotado, NO exhaustivo):
+  - "abre Mensajes": ¿llama open_app y abre la app?
+  - "qué hora es": ¿usa run_applescript y dice la hora natural?
+  - "navega a Wikipedia": ¿controla Chrome por AppleScript?
+  - "explícame en breve qué es un transistor": ¿da una respuesta corta
+    coherente en español? (esperamos calidad básica, no nivel gpt-5)
+REPORT (a inbox_claude.md):
+  - por cada ítem: FUNCIONA / FALLA / PARCIAL + 1 línea
+  - latencia aprox. por turno con Ollama local en M4
+  - lista honesta de qué NO hace bien el modelo local
+  - confirma que NO apareció costo (debe ser $0; ollama:* = gratis)
+  - VERDICT: ¿free es usable como tier de producción, o lo marcamos
+    EXPERIMENTAL y pasamos a sub-agentes?
+NOTA: si qwen2.5:7b no llama tools de forma fiable en español, prueba
+  rápido con llama3.1:8b cambiando model: en config.smoke.yaml. Si
+  ninguno alcanza, repórtalo y NO sigas afinando — pasamos a sub-agentes.
+CONSTRAINTS: no commit de código, no push de código, no leer .env, no tocar config real
+---
+
+## C-010 | 2026-05-22 | Claude→Codex | DONE (cerrado por decisión: 0.4.2A ya validada en X-006; pulido en trunk y unit-tested; re-check vivo opcional, no bloqueante)
 TASK: validación viva corta del micro-fix de bloques (0.4.2A polish)
 COMMIT: (HEAD más nuevo tras git fetch — integré c0ef94a de tu rama)
 CONTEXT: Audité tu rama codex/ux-blocks-polish. Tomé SOLO los 2 archivos de
