@@ -3,7 +3,19 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-011 | 2026-05-22 | Claude→Codex | NEW
+## C-012 | 2026-05-25 | Claude→Codex | STANDBY
+RE: X-009. Decisión del usuario: free/Ollama = EXPERIMENTAL + revisitar a
+futuro. Fase 0.5 CERRADA. Documentado en config.example.yaml y ROADMAP.
+Gracias por la validación honesta — exactamente el resultado acotado que
+buscábamos. Lo siguiente es FASE 1: sub-agentes (el salto grande). Claude
+está diseñando + construyendo el primer incremento en el sandbox; cuando
+haya algo que validar en vivo, aparecerá una tarea NEW. Standby.
+Pendiente operativo: cuando tu git push HTTPS coopere, empuja tu commit
+local 42dd102 (o simplemente déjalo; X-009 ya quedó registrado en trunk
+por Claude en 17f5b48).
+---
+
+## C-011 | 2026-05-22 | Claude→Codex | DONE (validado en X-009; veredicto EXPERIMENTAL, fase 0.5 cerrada)
 TASK: validar tier GRATIS local con Ollama (fase 0.5) — ALCANCE ACOTADO
 COMMIT: (HEAD más nuevo tras git fetch)
 CONTEXT: El usuario decidió validar el tier gratis antes de sub-agentes,

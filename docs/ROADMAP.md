@@ -137,28 +137,30 @@ user's explicit choice.
 **Exit criterion:** User can run a 30-minute session and see real cost
 in the cost log. Cost on `cheap` profile is well below $1/hour.
 
-## Fase 0.5 — Free tier (Ollama)  — IN PROGRESS (bounded scope, user decision)
+## Fase 0.5 — Free tier (Ollama)  ✅ DONE → EXPERIMENTAL (X-009, 2026-05-25)
 
-The humanitarian promise: a fully-local $0 option for users who can't pay
-for an API. Ollama brain is already implemented. This phase is
-deliberately SHORT — if local quality isn't enough, document it as an
-experimental tier and move on to sub-agents (do NOT let it sprawl).
+The humanitarian promise: a fully-local $0 option. Ollama brain works and
+costs $0, but the live validation (X-009) found that qwen2.5:7b does NOT
+reliably honor the tool-calling contract — it sometimes called open_app
+but often hallucinated (made up the time instead of calling
+run_applescript) or returned AppleScript as spoken text, inconsistently.
+Basic local Q&A in Spanish: fine. Reliable Mac control: no.
 
-- [x] `internal/brain/ollama.go` — local LLM via Ollama HTTP API with
-      tool calling. Cost pricing returns $0 for `ollama:*`.
-- [x] `free` profile rewritten as a real local voice tier: whisper.cpp
-      small + Ollama (qwen2.5:7b, alt llama3.1:8b) + macOS say + cues +
-      hotkey. No deep/paid escalation. Regression test
-      TestExampleConfig_FreeTierIsLocalAndFree guards it.
-- [ ] Live validation (C-011) on the Mac, bounded checklist:
-      simple commands, open apps, time, ONE short educational answer,
-      and an honest list of what local does NOT do well.
-- [ ] Document the result: production-ready free tier OR experimental.
+Per the user's pre-set bounded-scope rule, we did NOT keep tuning:
 
-**Exit criterion:** With no API keys, the `free` profile gives a working
-agent for "open / time / navigate / short answer". If qwen2.5:7b can't
-reliably call tools in Spanish, we label it experimental and proceed to
-sub-agents — this phase must not become long.
+- [x] `internal/brain/ollama.go` — local LLM via Ollama, $0 pricing.
+- [x] `free` profile = real local voice tier (whisper small + Ollama +
+      say + cues + hotkey), guarded by TestExampleConfig_FreeTierIsLocalAndFree.
+- [x] Live validation (X-009): documented above.
+- [x] Verdict: **free tier shipped as EXPERIMENTAL**, labeled honestly in
+      config.example.yaml. Not the dependable accessibility path — that's
+      `cheap` (gpt-5-mini) or `manos_libres` (gpt-5).
+
+**REVISIT (deferred, user decision "experimental + revisitar a futuro"):**
+when stronger local tool-calling models are available, re-run the C-011
+checklist against, e.g., qwen2.5:14b (if it fits the M4's RAM), llama3.1:8b,
+or a future release. If one reliably calls tools in Spanish, promote the
+free tier from experimental to production. Until then it stays best-effort.
 
 ## Fase 0.4.1 — Barge-in / stop-speaking  ✅ DONE (validated live 2026-05-22, X-005)
 

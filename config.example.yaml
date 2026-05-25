@@ -5,16 +5,24 @@ active_profile: free
 
 profiles:
 
-  # Tier 0 — fully local, $0 cost. Everything runs on the Mac: STT
-  # (whisper.cpp), brain (Ollama), TTS (macOS say). No API key, no spend.
+  # Tier 0 — fully local, $0 cost. EXPERIMENTAL (validated X-009, 2026-05-25).
+  # Everything runs on the Mac: STT (whisper.cpp), brain (Ollama), TTS (say).
+  # No API key, no spend.
+  #
+  # HONEST STATUS: qwen2.5:7b is NOT reliable for Mac control. In live tests
+  # it sometimes called open_app correctly but often hallucinated (e.g. made
+  # up the time instead of calling run_applescript) or returned AppleScript as
+  # spoken text instead of invoking the tool — inconsistently across turns.
+  # It IS fine for basic local Q&A in Spanish. Use this tier as a free,
+  # best-effort option, not as the dependable accessibility experience — for
+  # that use `cheap` (gpt-5-mini) or `manos_libres` (gpt-5). Revisit when
+  # stronger local tool-calling models exist (qwen2.5:14b if it fits your M4,
+  # or future releases).
+  #
   # Prerequisites:
   #   brew install ollama && ollama serve   (in another terminal)
-  #   ollama pull qwen2.5:7b                 (~4.7 GB; good Spanish + tool calling)
-  #   brew install sox whisper-cpp           (already installed if you ran voice)
-  #   ~/.whisper-models/ggml-small.bin
-  # Honest expectation: a 7B local model is far weaker than GPT-5. It handles
-  # simple commands (open apps, time, navigate) well; deep educational answers
-  # will be basic. This is the no-cost accessibility tier, not the premium one.
+  #   ollama pull qwen2.5:7b                 (~4.7 GB; alt: llama3.1:8b)
+  #   brew install sox whisper-cpp ; ~/.whisper-models/ggml-small.bin
   free:
     voice:
       mode: pipeline
