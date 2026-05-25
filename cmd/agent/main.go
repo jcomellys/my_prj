@@ -21,6 +21,7 @@ import (
 	"github.com/jcomellys/voice-mac-agent/internal/cost"
 	"github.com/jcomellys/voice-mac-agent/internal/osadapter"
 	"github.com/jcomellys/voice-mac-agent/internal/stt"
+	"github.com/jcomellys/voice-mac-agent/internal/subagent"
 	"github.com/jcomellys/voice-mac-agent/internal/tools"
 	"github.com/jcomellys/voice-mac-agent/internal/tts"
 	"github.com/jcomellys/voice-mac-agent/internal/voice"
@@ -102,6 +103,7 @@ func main() {
 	}
 	// Two-tier routing: if a deep brain is configured, the cheap brain
 	// escalates hard turns to it. Most turns stay cheap.
+	var deepBrain brain.Brain
 	if d := prof.Brain.Deep; d != nil {
 		deep, err := buildBrain(agent.BrainConfig{
 			Provider:    d.Provider,
@@ -112,8 +114,42 @@ func main() {
 		if err != nil {
 			fatal(log, fmt.Errorf("deep brain: %w", err))
 		}
+		deepBrain = deep
 		orch.WithDeepBrain(deep)
 		log.Info("brain.deep.ready", "name", deep.Name())
+	}
+
+	// Sub-agent: delegate_task hands big multi-step jobs to an autonomous
+	// worker on the strongest available brain, with an extended tool set
+	// (the OS tools plus read/write file). Registered into the frontal
+	// registry late — the orchestrator reads specs per turn, so it's picked
+	// up. Shell stays allowlist-gated; that's the safety boundary.
+	if cfg.Tools.Delegate.Enabled {
+		subBrain := deepBrain
+		if subBrain == nil {
+			subBrain = b
+		}
+		subReg := tools.NewRegistry()
+		if cfg.Tools.OpenApp.Enabled {
+			subReg.Register(tools.NewOpenApp(osa))
+		}
+		if cfg.Tools.AppleScript.Enabled {
+			subReg.Register(tools.NewAppleScript(osa))
+		}
+		if cfg.Tools.Shell.Enabled {
+			subReg.Register(tools.NewShell(osa, cfg.Tools.Shell.AllowUnrestricted, cfg.Tools.Shell.Allowlist))
+		}
+		if cfg.Tools.Screenshot.Enabled {
+			subReg.Register(tools.NewScreenshot())
+		}
+		subReg.Register(tools.NewReadFile())
+		subReg.Register(tools.NewWriteFile())
+
+		runner := subagent.New(subBrain, subReg, agent.SubAgentSystemPrompt, log)
+		runner.Cost = tracker
+		runner.SessionID = "subagent"
+		registry.Register(tools.NewDelegateTask(runner))
+		log.Info("subagent.ready", "brain", subBrain.Name(), "tools", len(subReg.Specs()))
 	}
 
 	// --- Run ----------------------------------------------------------------

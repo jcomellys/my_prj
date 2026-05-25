@@ -227,7 +227,48 @@ Claude:
       slow deep-brain answers). Needs a Brain.ChatStream variant + a
       pipeline that pipes blocks to TTS; bigger change, kept separate.
 
-## Fase 1 — Realtime voice as premium option
+## Fase 1 — Sub-agents (delegate_task)  — increment 1 done (live validation pending)
+
+The big capability leap from the original vision ("study a whole book",
+"build an app", "analyze a circuit in depth"). The frontal agent stays
+conversational and cheap; for heavy multi-step jobs it calls delegate_task,
+which hands the work to an autonomous sub-agent that loops brain+tools many
+times and reports back a summary the frontal reads aloud. User chose
+"amplio: control casi total" power level.
+
+- [x] `internal/subagent/subagent.go` — Runner: autonomous brain+tools loop
+      on the strongest available brain, bounded by MaxRounds (default 24,
+      caps worst-case cost/time), records cost per call, honors ctx cancel
+      (so a hotkey barge-in aborts a long delegated task).
+- [x] `internal/tools/file.go` — read_file / write_file with safety:
+      ~ expansion, no `..` traversal, write refuses macOS system dirs.
+- [x] `internal/tools/delegate.go` — delegate_task tool (depends on a
+      TaskDelegate interface, so tools doesn't import subagent — no cycle).
+- [x] Sub-agent gets the OS tools + read/write file; shell stays
+      allowlist-gated (the safety boundary for "execute" power).
+- [x] Prompts: frontal told to delegate big tasks (and say a one-liner
+      first); sub-agent prompt is an autonomous worker that returns a short
+      Spanish summary and skips destructive actions.
+- [x] Wired in main.go behind `tools.delegate.enabled`; uses the deep brain
+      if configured, else the main brain.
+- [x] Tests: runner (tool loop, MaxRounds cap, ctx cancel), file tools
+      (write+read, system-path refusal, traversal refusal, truncation),
+      delegate tool (task passthrough, empty, nil, error). All green -race.
+- [ ] Live validation (C-013): a real delegated task on the Mac (e.g.
+      "escribe en un archivo un resumen de 5 puntos sobre los transistores"
+      or a small multi-step job) — confirm it works end to end and the
+      frontal narrates the summary.
+
+Known limits of increment 1 (honest):
+- No mid-task voice narration: delegate_task blocks while the sub-agent
+  works; the frontal speaks only the final summary. (Barge-in DOES cancel
+  a long task, since the sub-agent honors ctx.) Real-time progress needs
+  concurrency/streaming — a later increment.
+- No budget check mid-task: MaxRounds bounds cost; a per-round budget guard
+  is a follow-up.
+- No recursion: the sub-agent does not get its own delegate_task.
+
+## Fase 2 — Realtime voice as premium option (renumbered; deferred)
 
 - [ ] `internal/voice/realtime.go` — `voice.Provider` implementation
       using the OpenAI Realtime API over WebSocket.

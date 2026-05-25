@@ -201,13 +201,18 @@ product.
 │   └── TESTING.md               step-by-step user test plan
 ├── internal/
 │   ├── activator/               how the user triggers "start listening"
-│   ├── agent/                   orchestrator, config, system prompt
-│   ├── brain/                   LLM provider interface + OpenAI + Mock
+│   ├── activator/               also: SupportsBargeIn() for interrupt
+│   ├── agent/                   orchestrator (router/escalate, budget), prompts
+│   ├── audiocue/                earcons (mic open/close) via afplay
+│   ├── brain/                   LLM iface + OpenAI/Anthropic/Ollama/Mock
+│   ├── cost/                    NDJSON cost tracker + pricing
 │   ├── osadapter/               OS control surface (macos.go, stub.go)
-│   ├── stt/                     speech-to-text interface + stdin placeholder
-│   ├── tools/                   registry + open_app, applescript, shell
+│   ├── stt/                     STT iface + stdin + whisper.cpp
+│   ├── subagent/                autonomous Runner for delegate_task (Fase 1)
+│   ├── tools/                   registry + open_app/applescript/shell/
+│   │                            screenshot/show_cost/read_file/write_file/delegate_task
 │   ├── tts/                     text-to-speech interface + macOS say
-│   └── voice/                   high-level voice provider (Pipeline)
+│   └── voice/                   Pipeline (STT→brain→TTS) + barge-in
 ├── go.mod
 └── README.md
 ```

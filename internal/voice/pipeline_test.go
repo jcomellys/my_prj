@@ -13,7 +13,7 @@ import (
 
 type onceActivator struct{ calls int }
 
-func (a *onceActivator) Name() string         { return "once" }
+func (a *onceActivator) Name() string          { return "once" }
 func (a *onceActivator) SupportsBargeIn() bool { return false }
 func (a *onceActivator) WaitForActivation(ctx context.Context) error {
 	a.calls++
@@ -92,14 +92,14 @@ func TestPipeline_SilentTurnPlaysCapturedSkipsBrain(t *testing.T) {
 // barge, then returns nil. Later calls block on ctx so the loop can be ended
 // by cancelling the parent context.
 type bargeActivator struct {
-	mu      sync.Mutex
-	calls   int
-	barge   chan struct{}
+	mu    sync.Mutex
+	calls int
+	barge chan struct{}
 }
 
 func newBargeActivator() *bargeActivator { return &bargeActivator{barge: make(chan struct{})} }
 
-func (a *bargeActivator) Name() string         { return "barge" }
+func (a *bargeActivator) Name() string          { return "barge" }
 func (a *bargeActivator) SupportsBargeIn() bool { return true }
 func (a *bargeActivator) WaitForActivation(ctx context.Context) error {
 	a.mu.Lock()

@@ -54,9 +54,9 @@ type antCacheControl struct {
 }
 
 type antTool struct {
-	Name         string         `json:"name"`
-	Description  string         `json:"description"`
-	InputSchema  map[string]any `json:"input_schema"`
+	Name         string           `json:"name"`
+	Description  string           `json:"description"`
+	InputSchema  map[string]any   `json:"input_schema"`
 	CacheControl *antCacheControl `json:"cache_control,omitempty"`
 }
 
@@ -70,8 +70,8 @@ type antContentBlock struct {
 	// Content can be either a plain string OR an array of inner blocks
 	// (e.g., for tool_result that includes an image). We use any to let
 	// json/Marshal pick the right shape.
-	Content any           `json:"content,omitempty"`
-	Source  *antImageSrc  `json:"source,omitempty"`
+	Content any          `json:"content,omitempty"`
+	Source  *antImageSrc `json:"source,omitempty"`
 }
 
 type antImageSrc struct {

@@ -98,6 +98,7 @@ type ToolsConfig struct {
 	OpenApp     ToolEnable      `yaml:"open_app"`
 	AppleScript ToolEnable      `yaml:"applescript"`
 	Screenshot  ToolEnable      `yaml:"screenshot"`
+	Delegate    ToolEnable      `yaml:"delegate"` // enables the delegate_task sub-agent
 }
 
 type ToolEnable struct {

@@ -35,6 +35,8 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"Messages",
 		"nombre natural en español",
 		"Mensajes",
+		// Fase 1: delegate big multi-step tasks to a sub-agent.
+		"delegate_task",
 		// Fase 0.4.2A: bounded long answers in blocks.
 		"por bloques",
 		"máximo 1000 caracteres",

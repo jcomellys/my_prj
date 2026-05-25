@@ -24,8 +24,8 @@ func (p Pricing) USD(inputTokens, outputTokens, cachedInputTokens int) float64 {
 		regularInput = 0
 	}
 	const million = 1_000_000.0
-	return (float64(regularInput)*p.InputPer1M+
-		float64(cachedInputTokens)*p.CachedInputPer1M+
+	return (float64(regularInput)*p.InputPer1M +
+		float64(cachedInputTokens)*p.CachedInputPer1M +
 		float64(outputTokens)*p.OutputPer1M) / million
 }
 

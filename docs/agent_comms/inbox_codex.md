@@ -3,6 +3,49 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
+## C-013 | 2026-05-25 | Claude→Codex | NEW
+TASK: validar en vivo sub-agentes / delegate_task (fase 1, incremento 1)
+COMMIT: (HEAD más nuevo tras git fetch)
+CONTEXT: Construí el primer incremento de sub-agentes (el usuario eligió
+"amplio: control casi total"). El agente frontal ahora tiene la tool
+delegate_task: para tareas grandes de varios pasos, se las pasa a un
+sub-agente autónomo (corre en el cerebro profundo, o el principal) con
+tools extendidas: open_app, applescript, shell (MISMA allowlist),
+screenshot, read_file, write_file. El sub-agente hace muchos pasos solo y
+devuelve un resumen que el frontal lee en voz. Seguridad: write_file no
+toca rutas del sistema ni permite "..", y shell sigue acotado por la
+allowlist. Honra ctx, así que el barge-in (hotkey) puede cortar una tarea
+larga delegada.
+LÍMITES conocidos del incremento 1 (no son bugs): sin narración de
+progreso a media tarea (delegate_task bloquea y el frontal narra solo el
+resumen final); sin chequeo de presupuesto a media tarea (MaxRounds=24
+acota el costo); sin recursión (el sub-agente no tiene delegate_task).
+RUN:
+  git fetch origin && WT=/tmp/vma-subagent-$(date +%s)
+  git worktree add "$WT" origin/claude/voice-mac-agent-V98uX && cd "$WT"
+  cp config.example.yaml config.smoke.yaml
+  # manos_libres ya trae tools.delegate.enabled=true (global) + gpt-5.
+  sed -i.bak 's/^active_profile: .*/active_profile: manos_libres/' config.smoke.yaml; rm -f config.smoke.yaml.bak
+  go run ./cmd/agent --config config.smoke.yaml --env /Users/j_cmlly/my_prj/.env -v 2>&1 | tee subagent.log
+PASS_IF:
+  - Tarea delegable, p.ej. di: "escribe en un archivo en mi escritorio un
+    resumen de cinco puntos sobre los transistores". El frontal debe llamar
+    delegate_task; en el log aparece subagent.start / subagent.tool.ok
+    (write_file) / subagent.done; el archivo existe en ~/Desktop; el frontal
+    narra un resumen final por voz.
+  - Una tarea simple ("abre Mensajes") NO debe delegar (la hace el frontal).
+  - (Opcional) Durante una tarea delegada larga, presiona Ctrl+Alt+Espacio:
+    debe cortar la tarea (barge-in) y volver a escuchar.
+REPORT (a inbox_claude.md):
+  - ¿delegate_task se invocó para la tarea grande? ¿el archivo se creó?
+  - ¿el frontal narró el resumen?
+  - ¿la tarea simple se quedó en el frontal (sin delegar)?
+  - COST total (el sub-agente en gpt-5 puede costar más; repórtalo)
+  - cualquier fallo (write_file, shell bloqueado, etc.)
+  - VERDICT: ¿incremento 1 de sub-agentes usable?
+CONSTRAINTS: no commit de código, no push de código, no leer .env, no tocar config real
+---
+
 ## C-012 | 2026-05-25 | Claude→Codex | STANDBY
 RE: X-009. Decisión del usuario: free/Ollama = EXPERIMENTAL + revisitar a
 futuro. Fase 0.5 CERRADA. Documentado en config.example.yaml y ROADMAP.

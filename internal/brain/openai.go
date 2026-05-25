@@ -231,7 +231,8 @@ func toOAIMessages(in []Message) []oaiMessage {
 
 // dataURL encodes an ImageBlob as a data: URL so OpenAI's image_url field
 // can carry it inline (no separate upload needed). Format:
-//   data:<mediaType>;base64,<b64data>
+//
+//	data:<mediaType>;base64,<b64data>
 func dataURL(img ImageBlob) string {
 	mt := img.MediaType
 	if mt == "" {

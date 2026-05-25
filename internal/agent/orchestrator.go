@@ -56,10 +56,10 @@ type Orchestrator struct {
 
 func New(v voice.Provider, b brain.Brain, reg *tools.Registry, system string, log *slog.Logger) *Orchestrator {
 	o := &Orchestrator{
-		Voice:     v,
-		Brain:     b,
-		Tools:     reg,
-		System:    system,
+		Voice:         v,
+		Brain:         b,
+		Tools:         reg,
+		System:        system,
 		MaxRounds:     6,
 		Log:           log,
 		SessionID:     newSessionID(),

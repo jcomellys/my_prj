@@ -21,7 +21,7 @@ const (
 type Message struct {
 	Role       Role        `json:"role"`
 	Content    string      `json:"content,omitempty"`
-	Images     []ImageBlob `json:"-"` // images attached to this message (encoded per-provider)
+	Images     []ImageBlob `json:"-"`                      // images attached to this message (encoded per-provider)
 	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`   // assistant turns may have these
 	ToolCallID string      `json:"tool_call_id,omitempty"` // for role=tool, the id this answers
 	Name       string      `json:"name,omitempty"`         // for role=tool, the tool name

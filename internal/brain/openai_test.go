@@ -113,10 +113,10 @@ func TestOpenAI_ReasoningModelDropsTemperature(t *testing.T) {
 	defer srv.Close()
 
 	cases := []struct {
-		model      string
-		userTemp   float64
-		wantSent   bool
-		wantValue  float64
+		model     string
+		userTemp  float64
+		wantSent  bool
+		wantValue float64
 	}{
 		// GPT-5 with non-default temp: must NOT be sent.
 		{"gpt-5", 0.3, false, 0},

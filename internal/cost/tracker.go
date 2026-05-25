@@ -77,11 +77,11 @@ func (t *Tracker) Record(e Entry) error {
 
 // Summary aggregates entries whose timestamp is >= since.
 type Summary struct {
-	Entries     int     `json:"entries"`
-	InputTokens int     `json:"in"`
-	OutputTokens int    `json:"out"`
-	CachedTokens int    `json:"cached_in"`
-	USD         float64 `json:"usd"`
+	Entries      int     `json:"entries"`
+	InputTokens  int     `json:"in"`
+	OutputTokens int     `json:"out"`
+	CachedTokens int     `json:"cached_in"`
+	USD          float64 `json:"usd"`
 }
 
 // Since reads the log and returns a Summary of entries at or after `since`.

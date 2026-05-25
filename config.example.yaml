@@ -230,6 +230,12 @@ tools:
     enabled: true
   screenshot:
     enabled: true   # captura pantalla; pide permiso de Screen Recording la 1ª vez
+  delegate:
+    enabled: true   # sub-agente para tareas grandes (delegate_task). Usa el
+                    # cerebro profundo si existe, o el principal. El sub-agente
+                    # hereda shell con la MISMA allowlist + read_file/write_file.
+                    # Para que pueda ejecutar/compilar de verdad, amplía la
+                    # allowlist de shell o pon allow_unrestricted: true (con cuidado).
 
 # Cost tracking — stored locally in cost.db (SQLite). Shown on demand.
 cost:

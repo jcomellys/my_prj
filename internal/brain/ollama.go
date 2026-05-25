@@ -45,10 +45,10 @@ func (o *Ollama) Name() string { return "ollama:" + o.Model }
 // --- wire types -------------------------------------------------------------
 
 type olMessage struct {
-	Role      string         `json:"role"`
-	Content   string         `json:"content,omitempty"`
-	ToolCalls []olToolCall   `json:"tool_calls,omitempty"`
-	ToolName  string         `json:"tool_name,omitempty"`
+	Role      string       `json:"role"`
+	Content   string       `json:"content,omitempty"`
+	ToolCalls []olToolCall `json:"tool_calls,omitempty"`
+	ToolName  string       `json:"tool_name,omitempty"`
 }
 
 type olToolCall struct {
