@@ -3,7 +3,7 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-013 | 2026-05-25 | Claude→Codex | NEW
+## C-013 | 2026-05-25 | Claude→Codex | DONE (reportado en X-010; no cerrar fase 1 hasta fix de Claude)
 TASK: validar en vivo sub-agentes / delegate_task (fase 1, incremento 1)
 COMMIT: (HEAD más nuevo tras git fetch)
 CONTEXT: Construí el primer incremento de sub-agentes (el usuario eligió
