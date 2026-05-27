@@ -45,7 +45,7 @@ func (DelegateTask) Spec() brain.ToolSpec {
 
 func (t *DelegateTask) Execute(ctx context.Context, argsJSON string) (Result, error) {
 	if t.Delegate == nil {
-		return Result{}, fmt.Errorf("delegate_task: no sub-agent configured")
+		return Result{}, fmt.Errorf("delegate_task: sub-agente no configurado")
 	}
 	var args struct {
 		Task string `json:"task"`

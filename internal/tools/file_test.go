@@ -34,14 +34,38 @@ func TestWriteThenReadFile(t *testing.T) {
 	}
 }
 
+func TestWriteFile_ExpandsHomeAndOverwrites(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	p := filepath.Join(home, "voice-agent", "note.txt")
+
+	w := NewWriteFile()
+	if _, err := w.Execute(context.Background(), `{"path":"~/voice-agent/note.txt","content":"primero"}`); err != nil {
+		t.Fatalf("write first: %v", err)
+	}
+	if _, err := w.Execute(context.Background(), `{"path":"~/voice-agent/note.txt","content":"segundo"}`); err != nil {
+		t.Fatalf("write overwrite: %v", err)
+	}
+	got, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read overwritten file: %v", err)
+	}
+	if string(got) != "segundo" {
+		t.Fatalf("content after overwrite = %q", string(got))
+	}
+}
+
 func TestWriteFile_RejectsSystemPath(t *testing.T) {
 	w := NewWriteFile()
-	_, err := w.Execute(context.Background(), `{"path":"/usr/bin/evil","content":"x"}`)
-	if err == nil {
-		t.Fatal("expected refusal to write to a system path")
-	}
-	if !strings.Contains(err.Error(), "system path") {
-		t.Errorf("expected system-path error, got %v", err)
+	for _, root := range systemRoots {
+		p := filepath.Join(root, "voice-agent-test.txt")
+		_, err := w.Execute(context.Background(), `{"path":"`+p+`","content":"x"}`)
+		if err == nil {
+			t.Fatalf("expected refusal to write to system root %s", root)
+		}
+		if !strings.Contains(err.Error(), "system path") {
+			t.Errorf("expected system-path error for %s, got %v", root, err)
+		}
 	}
 }
 
@@ -74,5 +98,27 @@ func TestReadFile_Truncates(t *testing.T) {
 	}
 	if len(got.Text) > 1100 {
 		t.Errorf("expected bounded output, got %d", len(got.Text))
+	}
+}
+
+func TestReadFile_DefaultLimitIs200KiB(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "big-default.txt")
+	big := strings.Repeat("a", 200*1024+17)
+	if err := os.WriteFile(p, []byte(big), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := NewReadFile().Execute(context.Background(), `{"path":"`+p+`"}`)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(got.Text, "truncated") {
+		t.Fatalf("expected truncation marker, got suffix %q", got.Text[len(got.Text)-20:])
+	}
+	if !strings.HasPrefix(got.Text, strings.Repeat("a", 200*1024)) {
+		t.Fatalf("expected 200 KiB prefix before truncation marker")
+	}
+	if strings.Contains(got.Text, strings.Repeat("a", 200*1024+1)) {
+		t.Fatalf("read_file returned more than the default 200 KiB payload")
 	}
 }
