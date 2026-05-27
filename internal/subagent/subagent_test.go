@@ -4,8 +4,11 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
 	"github.com/jcomellys/voice-mac-agent/internal/tools"
@@ -67,6 +70,38 @@ func TestRunner_RunsToolsThenSummarizes(t *testing.T) {
 	}
 }
 
+func TestRunner_WriteFileEndToEndWithMockBrain(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes", "transistor.txt")
+	reg := tools.NewRegistry()
+	reg.Register(tools.NewWriteFile())
+
+	b := &scriptedBrain{name: "mock", queue: []brain.Response{
+		{ToolCalls: []brain.ToolCall{{
+			ID:        "write-1",
+			Name:      "write_file",
+			Arguments: `{"path":"` + path + `","content":"uno\ndos\ntres"}`,
+		}}},
+		{Text: "Archivo creado con tres puntos."},
+	}}
+	r := New(b, reg, "sys", quiet())
+
+	out, err := r.Run(context.Background(), "crea un archivo de prueba")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(out, "Archivo creado") {
+		t.Fatalf("expected final summary, got %q", out)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("expected delegated write_file output: %v", err)
+	}
+	if string(got) != "uno\ndos\ntres" {
+		t.Fatalf("file content = %q", string(got))
+	}
+}
+
 func TestRunner_RespectsMaxRounds(t *testing.T) {
 	reg := tools.NewRegistry()
 	probe := &probeTool{name: "loop", result: "again"}
@@ -82,14 +117,14 @@ func TestRunner_RespectsMaxRounds(t *testing.T) {
 	r.MaxRounds = 5
 
 	out, err := r.Run(context.Background(), "loop forever")
-	if err != nil {
-		t.Fatalf("Run: %v", err)
+	if err == nil {
+		t.Fatalf("expected MaxRounds error, got output %q", out)
 	}
 	if probe.called > 5 {
 		t.Errorf("tool called %d times, want <= MaxRounds (5)", probe.called)
 	}
-	if !strings.Contains(strings.ToLower(out), "máximo de pasos") {
-		t.Errorf("expected max-rounds message, got %q", out)
+	if !strings.Contains(err.Error(), "MaxRounds=5") {
+		t.Errorf("expected clear MaxRounds error, got %v", err)
 	}
 }
 
@@ -104,5 +139,30 @@ func TestRunner_HonorsContextCancel(t *testing.T) {
 	_, err := r.Run(ctx, "tarea")
 	if err == nil {
 		t.Fatal("expected context cancellation error")
+	}
+}
+
+type blockingBrain struct{}
+
+func (blockingBrain) Name() string { return "blocking" }
+func (blockingBrain) Chat(ctx context.Context, _ []brain.Message, _ []brain.ToolSpec) (*brain.Response, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestRunner_ContextCancelDuringBrainDoesNotHang(t *testing.T) {
+	reg := tools.NewRegistry()
+	r := New(blockingBrain{}, reg, "sys", quiet())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := r.Run(ctx, "tarea larga")
+	if err == nil {
+		t.Fatal("expected cancellation error")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("Run returned too slowly after cancellation: %s", elapsed)
 	}
 }

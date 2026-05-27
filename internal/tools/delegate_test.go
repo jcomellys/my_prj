@@ -48,6 +48,9 @@ func TestDelegateTask_NoDelegate(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no sub-agent configured")
 	}
+	if !strings.Contains(err.Error(), "no configurado") {
+		t.Fatalf("expected no configurado error, got %v", err)
+	}
 }
 
 func TestDelegateTask_PropagatesError(t *testing.T) {

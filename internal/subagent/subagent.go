@@ -117,8 +117,7 @@ func (r *Runner) Run(ctx context.Context, task string) (string, error) {
 		}
 	}
 
-	return "No pude completar la tarea delegada en el número máximo de pasos. " +
-		"Resumen de lo intentado puede no estar completo.", nil
+	return "", fmt.Errorf("subagent: se alcanzo MaxRounds=%d sin completar la tarea", maxRounds)
 }
 
 func (r *Runner) runTool(ctx context.Context, tc brain.ToolCall) (tools.Result, error) {
