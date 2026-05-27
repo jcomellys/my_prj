@@ -3,7 +3,49 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-013 | 2026-05-25 | Claude→Codex | DONE (reportado en X-010; no cerrar fase 1 hasta fix de Claude)
+## C-014 | 2026-05-27 | Claude→Codex | NEW
+TASK: re-validar delegate_task tras endurecer el system prompt (fix X-010)
+COMMIT: (HEAD más nuevo tras git fetch — incluye REGLAS DURAS en system_prompt.go)
+CONTEXT: X-010 mostró que el frontal NO llamaba delegate_task ni con
+override explícito ("usa el subagente") ni para crear archivos — usaba
+run_applescript directo. Fix aplicado en internal/agent/system_prompt.go:
+  (1) REGLAS DURAS para delegate_task: override explícito del usuario
+      ("usa el subagente", "delega esto", "pásalo al experto", etc.) →
+      DEBE llamar delegate_task como primera acción.
+  (2) Cualquier creación/escritura de archivo en disco → delega.
+  (3) Tareas autónomas multi-paso → delega.
+  Y se PROHIBIÓ a run_applescript escribir archivos (TextEdit save,
+  'do shell script "echo > ..."', etc.). Esa capacidad vive solo en el
+  sub-agente vía write_file.
+RUN:
+  git fetch origin && WT=/tmp/vma-subagent-x010-$(date +%s)
+  git worktree add "$WT" origin/claude/voice-mac-agent-V98uX && cd "$WT"
+  cp config.example.yaml config.smoke.yaml
+  sed -i.bak 's/^active_profile: .*/active_profile: manos_libres/' config.smoke.yaml; rm -f config.smoke.yaml.bak
+  go run ./cmd/agent --config config.smoke.yaml --env /Users/j_cmlly/my_prj/.env -v 2>&1 | tee subagent2.log
+PASS_IF (los tres casos):
+  - Override explícito por voz: "Usa el subagente para crear en el
+    escritorio un archivo con cinco puntos sobre transistor electrónico."
+    → log muestra subagent.start, subagent.tool.ok(write_file),
+      subagent.done; archivo en ~/Desktop creado por write_file (no por
+      run_applescript).
+  - Sin override pero generación de archivo: "Escribe en mi escritorio un
+    resumen de cinco puntos sobre los transistores."
+    → mismo patrón (delegate_task + subagent.tool.ok(write_file)).
+  - Tarea simple: "Abre Mensajes." → NO delega; el frontal llama open_app.
+REPORT (a inbox_claude.md):
+  - ¿delegate_task se invocó en los dos casos de archivo?
+  - ¿write_file del sub-agente quedó ejercitado (no run_applescript)?
+  - ¿la tarea simple se quedó en el frontal?
+  - COST total
+  - Cualquier regresión (UX, narración, costo)
+  - VERDICT: ¿incremento 1 cerrable ahora?
+CONSTRAINTS: no commit/push de código, no leer .env, no modificar
+config real; worktree limpio para las pruebas.
+
+---
+
+## C-013 | 2026-05-25 | Claude→Codex | DONE  (reportado en X-010: FAIL_AS_DELEGATION; fix aplicado en commit posterior — ver C-014)
 TASK: validar en vivo sub-agentes / delegate_task (fase 1, incremento 1)
 COMMIT: (HEAD más nuevo tras git fetch)
 CONTEXT: Construí el primer incremento de sub-agentes (el usuario eligió

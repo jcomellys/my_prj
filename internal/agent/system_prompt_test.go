@@ -37,6 +37,13 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"Mensajes",
 		// Fase 1: delegate big multi-step tasks to a sub-agent.
 		"delegate_task",
+		// Fase 1 (X-010 fix): hard rules for delegation — explicit override,
+		// any file creation, and ban on writing files from the frontal.
+		"REGLAS DURAS",
+		"usa el subagente",
+		"delega esto",
+		"PROHIBIDO usarlo para escribir archivos",
+		"write_file",
 		// Fase 0.4.2A: bounded long answers in blocks.
 		"por bloques",
 		"máximo 1000 caracteres",
