@@ -3,6 +3,48 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
+## C-017 | 2026-05-28 | Claude→Codex | NEW (validación viva — junta con C-014/C-016; necesita la Mac y un PDF real)
+TASK: validar el CASO DE USO CENTRAL — "léeme la sección X" de un documento
+abierto, leído en voz y traducido a español si está en inglés.
+COMMIT: 2861506 (o el HEAD más nuevo de claude/voice-mac-agent-V98uX).
+CONTEXT: Nueva tool read_pdf (extracción nativa por PDFKit vía JXA,
+osascript -l JavaScript — no instala nada) + guía de prompt para leer solo
+la sección pedida (Chrome y PDF) + regla de traducción al español en
+tiempo real. La lógica Go está testeada; falta validar en vivo que el JXA
+de PDFKit funciona en la Mac real (no se puede testear en CI/Linux).
+PREREQUISITO: ten a mano (a) un PDF EN INGLÉS con secciones/encabezados
+abierto en Vista Previa, y (b) una página web en Chrome con encabezados.
+RUN (reusa el worktree de C-014/C-016):
+  git fetch origin && WT=/tmp/vma-read-$(date +%s)
+  git worktree add "$WT" origin/claude/voice-mac-agent-V98uX && cd "$WT"
+  cp config.example.yaml config.smoke.yaml
+  sed -i.bak 's/^active_profile: .*/active_profile: manos_libres/' config.smoke.yaml; rm -f config.smoke.yaml.bak
+  go run ./cmd/agent --config config.smoke.yaml --env /Users/j_cmlly/my_prj/.env -v 2>&1 | tee read.log
+PASS_IF:
+  - PDF en inglés abierto en Vista Previa. Di "léeme la sección
+    introducción" (o el título real). El agente DEBE: obtener la ruta de
+    Preview por AppleScript, llamar read_pdf (en el log: tool.ok read_pdf),
+    ubicar esa sección, y LEERLA EN ESPAÑOL (traducida), en bloques cortos.
+  - Verifica que NO leyó el PDF entero, solo la sección pedida.
+  - Página web en Chrome con secciones. Di "léeme la sección X". DEBE leer
+    solo esa sección (localiza el encabezado), traducida si está en inglés.
+  - PDF escaneado (imagen), si tienes uno: read_pdf devuelve vacío y el
+    agente ofrece leerlo con screenshot (no se cuelga ni inventa).
+  - Caso de control: pide "léelo en su idioma original" → NO traduce.
+REPORT (a inbox_claude.md, X-013 o el siguiente libre):
+  - ¿read_pdf extrajo el texto del PDF real? (sí/no; si no, pega el error
+    del log — probablemente el snippet JXA necesita un ajuste de una línea)
+  - ¿Leyó SOLO la sección pedida, no todo?
+  - ¿Tradujo correctamente inglés→español al leer en voz?
+  - ¿El caso "idioma original" respetó la instrucción?
+  - COST total
+  - VERDICT: ¿caso de uso central usable?
+CONSTRAINTS: no leer .env real, no commit/push de código, worktree limpio.
+Si el snippet JXA falla, NO lo arregles tú (es código): pega el error
+exacto del log y Claude lo corrige.
+
+---
+
 ## C-016 | 2026-05-28 | Claude→Codex | NEW (validación viva — junta esta sesión con C-014; ambas necesitan la Mac)
 TASK: validar en vivo el fix de RESILIENCIA — el agente NO debe morir ante
 un error transitorio del cerebro/red; debe HABLAR el error y SEGUIR
