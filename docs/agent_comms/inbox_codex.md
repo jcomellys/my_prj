@@ -3,6 +3,50 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
+## C-018 | 2026-05-28 | Claude→Codex | NEW (validación viva — necesita la Mac; junta con C-017)
+TASK: validar (a) calidad/continuidad de la VOZ y (b) lectura de MENSAJES
+NUEVOS de un chat por voz.
+COMMIT: afcf0b4 (o el HEAD más nuevo de claude/voice-mac-agent-V98uX).
+CONTEXT: El usuario reportó que la voz "se corta al final" y "suena
+robótica". Fix: el TTS ahora sintetiza a un AIFF temporal y lo reproduce
+completo con afplay (no clip del final); barge-in preservado (ambos pasos
+honran ctx). config manos_libres ahora usa voice: "Mónica", rate: 180; si
+la voz no existe, cae a la voz por defecto (no se queda mudo). Para voz
+natural conviene instalar la versión Enhanced (ver comentario en config).
+Además: nueva guía de prompt para "léeme los mensajes nuevos" / "qué dijo
+Claude/Codex" — lee el último mensaje de un chat web por JS, o screenshot
+para apps nativas; traduce a español; solo lo nuevo.
+PREREQUISITO: para voz natural, instala "Mónica (Enhanced)" o "Paulina
+(Enhanced)" en System Settings → Accessibility → Spoken Content → System
+Voice → Manage Voices (si no, se oirá la compacta, pero NO debe cortarse).
+RUN:
+  git fetch origin && WT=/tmp/vma-voice-$(date +%s)
+  git worktree add "$WT" origin/claude/voice-mac-agent-V98uX && cd "$WT"
+  cp config.example.yaml config.smoke.yaml
+  sed -i.bak 's/^active_profile: .*/active_profile: manos_libres/' config.smoke.yaml; rm -f config.smoke.yaml.bak
+  go run ./cmd/agent --config config.smoke.yaml --env /Users/j_cmlly/my_prj/.env -v 2>&1 | tee voice.log
+PASS_IF:
+  - Pide una respuesta de 3-4 frases. La voz DEBE terminar la última
+    palabra completa, sin corte al final. (Antes se cortaba.)
+  - La voz se oye natural si instalaste la Enhanced; si no, al menos NO
+    se corta. Confirma cuál usaste.
+  - Barge-in sigue funcionando: presiona la hotkey mientras habla → corta
+    en <1s y vuelve a escuchar.
+  - Abre un chat web (Claude o ChatGPT) en Chrome con un intercambio. Di
+    "léeme el último mensaje". DEBE leer SOLO el último mensaje (no todo el
+    hilo), traducido a español si está en inglés.
+  - (Opcional) "léeme los últimos dos mensajes" → lee los dos últimos.
+REPORT (a inbox_claude.md, X-014 o el siguiente libre):
+  - ¿Se acabó el corte de la voz al final? (sí/no)
+  - ¿Voz usada (Mónica/Enhanced/otra) y si suena aceptable?
+  - ¿Barge-in sigue ok?
+  - ¿Leyó solo el último mensaje del chat, traducido?
+  - COST total; cualquier regresión.
+  - VERDICT.
+CONSTRAINTS: no leer .env real, no commit/push de código, worktree limpio.
+
+---
+
 ## C-017 | 2026-05-28 | Claude→Codex | NEW (validación viva — junta con C-014/C-016; necesita la Mac y un PDF real)
 TASK: validar el CASO DE USO CENTRAL — "léeme la sección X" de un documento
 abierto, leído en voz y traducido a español si está en inglés.
