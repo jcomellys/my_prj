@@ -44,6 +44,9 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"delega esto",
 		"PROHIBIDO usarlo para escribir archivos",
 		"write_file",
+		// Reading new chat messages aloud.
+		"Leer mensajes nuevos de un chat",
+		"último mensaje",
 		// Document reading + real-time translation (core accessibility use case).
 		"read_pdf",
 		"léeme la sección X",

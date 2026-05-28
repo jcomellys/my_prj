@@ -160,6 +160,14 @@ profiles:
             hora, gasto.
       tts:
         provider: macos_say
+        # Voz: las voces "compacta" por defecto suenan robóticas. Para una voz
+        # natural, instala una voz Enhanced/Premium en español:
+        #   System Settings → Accessibility → Spoken Content → System Voice →
+        #   Manage Voices → descarga "Mónica (Enhanced)" o "Paulina (Enhanced)".
+        # Luego pon aquí su nombre exacto. Si la voz no existe, el agente cae
+        # de vuelta a la voz por defecto en vez de quedarse mudo.
+        voice: "Mónica"
+        rate: 180            # palabras/min; vacío o 0 = ritmo del sistema
       # Earcons de accesibilidad: sonido al abrir y al cerrar el micrófono.
       # Encendidos por defecto. Imprescindibles para usuarios que no ven la
       # pantalla: marcan "habla ahora" y "te escuché, procesando".
