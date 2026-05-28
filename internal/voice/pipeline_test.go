@@ -2,6 +2,9 @@ package voice
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -213,4 +216,114 @@ func TestPipeline_BargeInCutsSpeechAndRelistens(t *testing.T) {
 // p_start is a tiny indirection so the goroutine call reads clearly.
 func p_start(p *Pipeline, ctx context.Context, h Handler) error {
 	return p.Start(ctx, h)
+}
+
+// --- resilience test doubles ---
+
+// alwaysActivator returns nil on every activation, so the turn loop is driven
+// purely by the STT (which ends the test by returning Canceled).
+type alwaysActivator struct{ calls int }
+
+func (a *alwaysActivator) Name() string          { return "always" }
+func (a *alwaysActivator) SupportsBargeIn() bool { return false }
+func (a *alwaysActivator) WaitForActivation(context.Context) error {
+	a.calls++
+	return nil
+}
+
+// textThenCancelSTT returns a real utterance on the first listen, then cancels
+// the loop on the second — modelling exactly one user turn before shutdown.
+type textThenCancelSTT struct {
+	calls int
+	first string
+}
+
+func (s *textThenCancelSTT) Name() string { return "text-cancel-stt" }
+func (s *textThenCancelSTT) Listen(ctx context.Context) (string, error) {
+	s.calls++
+	if s.calls == 1 {
+		return s.first, nil
+	}
+	return "", context.Canceled
+}
+
+// erroringHandler always fails, modelling a transient brain/network error.
+type erroringHandler struct {
+	calls int
+	err   error
+}
+
+func (h *erroringHandler) HandleUtterance(ctx context.Context, _ string) (string, error) {
+	h.calls++
+	return "", h.err
+}
+
+// TestPipeline_HandlerErrorStaysAlive is the core resilience contract: when the
+// brain/handler returns a transient error, the agent must speak something and
+// KEEP LISTENING — it must not terminate. A non-sighted user cannot restart it
+// from a keyboard, so a network hiccup terminating the process is a critical
+// accessibility failure.
+func TestPipeline_HandlerErrorStaysAlive(t *testing.T) {
+	act := &alwaysActivator{}
+	mic := &textThenCancelSTT{first: "abre Mensajes"}
+	speaker := &recordingTTS{}
+	handler := &erroringHandler{err: fmt.Errorf("openai request: dial tcp: i/o timeout")}
+
+	p := NewPipeline(mic, speaker, act)
+	err := p.Start(context.Background(), handler)
+	if err != nil {
+		t.Fatalf("Start returned %v, want nil — a transient handler error must not kill the agent", err)
+	}
+	if handler.calls != 1 {
+		t.Errorf("handler called %d times, want 1", handler.calls)
+	}
+	if speaker.spoke != 1 {
+		t.Errorf("TTS spoke %d times, want 1 (the error must be voiced)", speaker.spoke)
+	}
+	// The loop must have come back around to listen again (2nd Listen is what
+	// returns Canceled to end the test), proving it did not exit on the error.
+	if mic.calls != 2 {
+		t.Errorf("STT listened %d times, want 2 (agent must keep listening after an error)", mic.calls)
+	}
+}
+
+// TestPipeline_ShutdownDuringHandlerExits verifies the opposite: when the
+// parent context is cancelled (real shutdown), a handler error caused by that
+// cancellation does end the loop cleanly instead of looping forever.
+func TestPipeline_ShutdownDuringHandlerExits(t *testing.T) {
+	act := &onceActivator{}
+	mic := &textThenCancelSTT{first: "hola"}
+	speaker := &recordingTTS{}
+	handler := &erroringHandler{err: context.Canceled}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already shutting down
+
+	err := p_start(NewPipeline(mic, speaker, act), ctx, handler)
+	if err != nil {
+		t.Fatalf("Start returned %v, want nil on cancellation", err)
+	}
+}
+
+// TestSpokenError_ClassifiesByKind checks the user hears a message tailored to
+// the failure (connection vs saturation vs auth vs permission), not one opaque
+// sentence — important when the user must decide whether to retry or get help.
+func TestSpokenError_ClassifiesByKind(t *testing.T) {
+	cases := []struct {
+		err  string
+		want string
+	}{
+		{"openai request: dial tcp: i/o timeout", "conexión"},
+		{"anthropic: overloaded_error (529)", "saturado"},
+		{"openai: rate limit reached", "saturado"},
+		{"openai: invalid_api_key (401 unauthorized)", "clave"},
+		{"command not on allowlist: \"rm -rf /\"", "permiso"},
+		{"something totally unexpected happened", "sigo aquí"},
+	}
+	for _, c := range cases {
+		got := spokenError(errors.New(c.err))
+		if !strings.Contains(got, c.want) {
+			t.Errorf("spokenError(%q) = %q, want it to mention %q", c.err, got, c.want)
+		}
+	}
 }

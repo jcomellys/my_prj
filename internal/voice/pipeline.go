@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 
 	"github.com/jcomellys/voice-mac-agent/internal/activator"
 	"github.com/jcomellys/voice-mac-agent/internal/stt"
@@ -70,6 +71,10 @@ func (p *Pipeline) Start(ctx context.Context, h Handler) error {
 
 	for {
 		if err := ctx.Err(); err != nil {
+			// A cancelled parent context is a clean shutdown, not a failure.
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
 			return err
 		}
 
@@ -118,6 +123,13 @@ func (p *Pipeline) Start(ctx context.Context, h Handler) error {
 
 		barged, err := p.processTurn(ctx, h, text)
 		if err != nil {
+			// Only a cancelled context (shutdown / barge ending the program)
+			// stops the loop. Recoverable turn errors are handled inside
+			// processTurn (spoken + swallowed) so the agent stays alive — a
+			// non-sighted user cannot restart it from a keyboard.
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
 			return err
 		}
 		if barged {
@@ -168,8 +180,15 @@ func (p *Pipeline) processTurn(ctx context.Context, h Handler, text string) (bar
 		return true, nil
 	}
 	if herr != nil {
-		_ = p.TTS.Speak(ctx, "Hubo un problema procesando tu solicitud.")
-		return false, fmt.Errorf("handler: %w", herr)
+		// Shutdown (parent ctx cancelled) is fatal; everything else is a
+		// recoverable turn error: speak a helpful message and keep the loop
+		// alive so the user can simply try again.
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		p.log().Warn("turn.error", "err", herr)
+		_ = p.TTS.Speak(ctx, spokenError(herr))
+		return false, nil
 	}
 
 	if reply != "" {
@@ -179,7 +198,12 @@ func (p *Pipeline) processTurn(ctx context.Context, h Handler, text string) (bar
 			return true, nil
 		}
 		if serr != nil {
-			return false, fmt.Errorf("tts: %w", serr)
+			if ctx.Err() != nil {
+				return false, ctx.Err()
+			}
+			// A TTS hiccup must not kill the agent either; log and continue.
+			p.log().Warn("tts.error", "err", serr)
+			return false, nil
 		}
 	}
 	return false, nil
@@ -190,13 +214,48 @@ func (p *Pipeline) processTurn(ctx context.Context, h Handler, text string) (bar
 func (p *Pipeline) handleAndSpeak(ctx context.Context, h Handler, text string) error {
 	reply, err := h.HandleUtterance(ctx, text)
 	if err != nil {
-		_ = p.TTS.Speak(ctx, "Hubo un problema procesando tu solicitud.")
-		return fmt.Errorf("handler: %w", err)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		p.log().Warn("turn.error", "err", err)
+		_ = p.TTS.Speak(ctx, spokenError(err))
+		return nil
 	}
 	if reply != "" {
 		if err := p.TTS.Speak(ctx, reply); err != nil {
-			return fmt.Errorf("tts: %w", err)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			p.log().Warn("tts.error", "err", err)
+			return nil
 		}
 	}
 	return nil
+}
+
+// spokenError maps a recoverable turn error to a short Spanish sentence the
+// user hears. The agent stays alive after speaking it: a transient brain or
+// network failure must never terminate an agent that a non-sighted user
+// cannot restart from a keyboard.
+func spokenError(err error) string {
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "rate limit") || strings.Contains(msg, "429") ||
+		strings.Contains(msg, "overloaded") || strings.Contains(msg, "503"):
+		return "El servicio está saturado en este momento. Espera unos segundos y vuelve a intentarlo."
+	case strings.Contains(msg, "timeout") || strings.Contains(msg, "deadline") ||
+		strings.Contains(msg, "connection") || strings.Contains(msg, "no such host") ||
+		strings.Contains(msg, "dial ") || strings.Contains(msg, "eof") ||
+		strings.Contains(msg, "network") || strings.Contains(msg, "tls"):
+		return "Tuve un problema de conexión. Inténtalo de nuevo en un momento."
+	case strings.Contains(msg, "api key") || strings.Contains(msg, "apikey") ||
+		strings.Contains(msg, "api_key") || strings.Contains(msg, "401") ||
+		strings.Contains(msg, "unauthorized") || strings.Contains(msg, "invalid_api"):
+		return "Hay un problema con la clave de acceso al modelo. Avisa a quien configuró el agente."
+	case strings.Contains(msg, "not on allowlist") || strings.Contains(msg, "permission") ||
+		strings.Contains(msg, "refusing") || strings.Contains(msg, "not allowed"):
+		return "No tengo permiso para hacer eso."
+	default:
+		return "Hubo un problema procesando tu solicitud, pero sigo aquí. Inténtalo otra vez."
+	}
 }

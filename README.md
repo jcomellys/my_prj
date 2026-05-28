@@ -9,26 +9,49 @@ through natural conversation, with a brain (LLM) that is swappable so the
 system never becomes obsolete as AI advances, and with a free tier so that
 no one is priced out.
 
-**Status:** Fase 0.1 — skeleton with one end-to-end path working.
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phased plan and
+**Status:** Fase 1 — sub-agents (increment 1) in code; live voice validation
+pending. Everything through Fase 0.4.2A has been validated live on the Mac
+mini. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full phased plan and
 [`docs/HANDOFF.md`](docs/HANDOFF.md) if you are an AI or developer picking
 this project up.
 
-## What works today (fase 0.1)
+## What works today
 
-- Layered architecture: every provider is an interchangeable interface.
-- Pipeline voice mode: STT → Brain → TTS, each piece swappable.
-- One real brain wired: OpenAI (GPT-5 and GPT-5-mini) via raw HTTP.
+**Voice loop (validated live):**
+- Layered architecture: every provider is an interchangeable interface
+  (Brain, STT, TTS, Activator, OSAdapter, Tools) chosen by config.
+- Real speech in/out: microphone → `whisper.cpp` (STT) → Brain → macOS
+  `say` (TTS), with silence-based end-of-utterance detection.
+- Earcons: a tone when the mic opens and closes, so a non-sighted user
+  always knows the listening state.
+- Global hotkey activation (⌃⌥Space) and USB-presence activation.
+- Barge-in: one gesture cuts the agent off mid-thought or mid-speech and
+  starts the next turn — it never leaves the user talking over a monologue.
+- Resilient by design: a transient brain/network error is spoken and the
+  agent keeps listening; it does not terminate (a non-sighted user cannot
+  restart it from a keyboard).
+
+**Brains (swappable):**
+- OpenAI (GPT-5 / GPT-5-mini) and Anthropic (Claude, with prompt caching)
+  via raw HTTP. Ollama for the local $0 tier (EXPERIMENTAL — see roadmap).
+- Two-tier routing: a cheap brain handles simple turns and escalates to a
+  deep brain for teaching/analysis/code/math. Cost attributed per tier.
 - Mock brain for tests and offline development.
-- Three tools the brain can call:
-  - `open_app` — launch any Mac application
-  - `run_applescript` — full AppleScript dictionary of any scriptable app
-  - `run_shell` — shell commands with an allowlist for safety
-- macOS adapter using `open`, `osascript`, `/bin/sh`.
-- Native macOS TTS via the `say` command (Tahoe voices are excellent).
-- Stdin "STT" placeholder: you type, agent reads it aloud.
-- Three configuration profiles: `free`, `cheap`, `premium`.
-- Compiles clean for linux/amd64 (CI) and darwin/arm64 (Mac mini).
+
+**Cost control:**
+- Append-only NDJSON cost log; `show_cost` tool answers "cuánto llevo
+  gastado". Monthly-budget hard-stop plus a one-time spoken warning.
+- Bounded answers in blocks (≈ −70% cost on long educational replies).
+
+**Tools the brain can call:**
+- `open_app`, `run_applescript`, `run_shell` (allowlist-gated),
+  `screenshot`, `show_cost`, `read_file`, `write_file`.
+- `delegate_task` — hands a heavy multi-step job to an autonomous
+  sub-agent (Fase 1, increment 1; live validation in progress).
+
+Compiles clean for linux/amd64 (CI) and darwin/arm64 (Mac mini).
+Configuration profiles: `free`, `cheap`, `cheap_claude`, `voice`,
+`manos_libres`, `usb_switch`, `premium`.
 
 ## Quick start (on the Mac mini)
 
