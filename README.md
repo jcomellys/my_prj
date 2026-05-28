@@ -79,6 +79,16 @@ make run
 # The agent will call the open_app tool, Chrome opens, and macOS speaks back.
 ```
 
+Before a session, check the environment is ready:
+
+```bash
+go run ./cmd/agent --config config.yaml --doctor
+```
+
+`--doctor` verifies the microphone input volume isn't too low, the configured
+voice is installed (and not the robotic default), the whisper model and tools
+are present, and the brain API key is set — then tells you exactly what to fix.
+
 See [`docs/TESTING.md`](docs/TESTING.md) for the full step-by-step test plan.
 
 ## Vision

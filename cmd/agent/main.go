@@ -20,6 +20,7 @@ import (
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
 	"github.com/jcomellys/voice-mac-agent/internal/cost"
 	"github.com/jcomellys/voice-mac-agent/internal/osadapter"
+	"github.com/jcomellys/voice-mac-agent/internal/preflight"
 	"github.com/jcomellys/voice-mac-agent/internal/stt"
 	"github.com/jcomellys/voice-mac-agent/internal/subagent"
 	"github.com/jcomellys/voice-mac-agent/internal/tools"
@@ -32,6 +33,7 @@ func main() {
 		configPath = flag.String("config", "config.yaml", "path to YAML config")
 		envFile    = flag.String("env", ".env", "path to .env file (optional)")
 		verbose    = flag.Bool("v", false, "verbose logging")
+		doctor     = flag.Bool("doctor", false, "check the environment is ready (mic, voice, model, keys) and exit")
 	)
 	flag.Parse()
 
@@ -49,6 +51,19 @@ func main() {
 	}
 	prof := cfg.Active()
 	log.Info("config.loaded", "profile", cfg.ActiveProfile)
+
+	// --doctor: report environment readiness and exit. Catches the silent
+	// setup problems (low mic volume, missing/robotic voice, absent model or
+	// key) before a frustrating voice session.
+	if *doctor {
+		checks := preflight.Run(context.Background(), cfg, osadapter.NewMacOS())
+		report, fails := preflight.Report(checks)
+		fmt.Print(report)
+		if fails > 0 {
+			os.Exit(1)
+		}
+		return
+	}
 
 	// --- Brain ---------------------------------------------------------------
 	b, err := buildBrain(prof.Brain)
