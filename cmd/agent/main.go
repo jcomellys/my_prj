@@ -83,6 +83,9 @@ func main() {
 	if cfg.Tools.Screenshot.Enabled {
 		registry.Register(tools.NewScreenshot())
 	}
+	// read_pdf: native macOS PDF text extraction so the agent can read a PDF
+	// (or a section of it) aloud to a user who cannot see the screen.
+	registry.Register(tools.NewReadPDF(osa))
 	if tracker != nil {
 		registry.Register(tools.NewShowCost(tracker))
 	}
@@ -144,6 +147,7 @@ func main() {
 		}
 		subReg.Register(tools.NewReadFile())
 		subReg.Register(tools.NewWriteFile())
+		subReg.Register(tools.NewReadPDF(osa))
 
 		runner := subagent.New(subBrain, subReg, agent.SubAgentSystemPrompt, log)
 		runner.Cost = tracker

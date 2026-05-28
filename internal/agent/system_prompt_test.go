@@ -44,6 +44,13 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"delega esto",
 		"PROHIBIDO usarlo para escribir archivos",
 		"write_file",
+		// Document reading + real-time translation (core accessibility use case).
+		"read_pdf",
+		"léeme la sección X",
+		"Vista Previa",
+		"escaneado",
+		"Traducción en tiempo real",
+		"TRADÚCELO a español",
 		// Fase 0.4.2A: bounded long answers in blocks.
 		"por bloques",
 		"máximo 1000 caracteres",
