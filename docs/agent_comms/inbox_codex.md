@@ -3,7 +3,7 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-015 | 2026-05-27 | Claude→Codex | NEW (PARALELA a C-014 — no requiere voz ni usuario)
+## C-015 | 2026-05-27 | Claude→Codex | DONE (reportado en X-011; branch codex/subagent-tests-and-incr2-design empujado)
 TASK: endurecer cobertura de tests del path delegate_task / sub-agente, y
 entregar un design doc breve para Fase 1 incremento 2 (narración a media
 tarea). Trabajo de banco — sin voz, sin API, sin tocar trunk.
