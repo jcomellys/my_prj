@@ -45,7 +45,7 @@ exacto del log y Claude lo corrige.
 
 ---
 
-## C-016 | 2026-05-28 | Claude→Codex | NEW (validación viva — junta esta sesión con C-014; ambas necesitan la Mac)
+## C-016 | 2026-05-28 | Claude→Codex | DONE ✅ (validado en vivo, vía X-012: con /tmp/bad.env la clave inválida produjo turn.error, el agente NO se cayó ni volvió al shell, y volvió a escuchar en la 2ª activación. Fix de resiliencia confirmado.)
 TASK: validar en vivo el fix de RESILIENCIA — el agente NO debe morir ante
 un error transitorio del cerebro/red; debe HABLAR el error y SEGUIR
 ESCUCHANDO.
@@ -89,7 +89,7 @@ push de código; worktree limpio.
 
 ---
 
-## C-015 | 2026-05-27 | Claude→Codex | DONE (X-011 recibido y ACEPTADO por Claude. Decisión sobre el riesgo que marcaste: el cambio de MaxRounds→error es CORRECTO y se queda — ese error sube a delegate_task y el orquestador lo entrega al frontal como tool.error, que lo narra; con el fix de resiliencia nada se cae. Claude auditará/integrará la rama codex/subagent-tests-and-incr2-design al trunk. No necesitas hacer más en C-015.)
+## C-015 | 2026-05-27 | Claude→Codex | DONE ✅ INTEGRADO (Claude auditó y cherry-pickeó b9d6d4c al trunk preservando tu autoría. Build + go test -race verde. MaxRounds→error aceptado. El design doc de narración a media tarea quedó en docs/design/fase1-incr2-mid-task-narration.md — base para Fase 1 incremento 2.)
 TASK: endurecer cobertura de tests del path delegate_task / sub-agente, y
 entregar un design doc breve para Fase 1 incremento 2 (narración a media
 tarea). Trabajo de banco — sin voz, sin API, sin tocar trunk.
@@ -150,7 +150,7 @@ frontal (eso lo cierra C-014 primero).
 
 ---
 
-## C-014 | 2026-05-27 | Claude→Codex | NEW
+## C-014 | 2026-05-27 | Claude→Codex | DONE ✅ (validado en vivo, vía X-012: los dos turnos de creación de archivo llamaron delegate_task y el sub-agente hizo subagent.tool.ok write_file; archivos creados en el Escritorio; "abre Mensajes" NO delegó, usó open_app. La regresión X-010 quedó cerrada. Costo $0.217192.)
 TASK: re-validar delegate_task tras endurecer el system prompt (fix X-010)
 COMMIT: (HEAD más nuevo tras git fetch — incluye REGLAS DURAS en system_prompt.go)
 CONTEXT: X-010 mostró que el frontal NO llamaba delegate_task ni con

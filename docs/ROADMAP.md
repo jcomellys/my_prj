@@ -220,6 +220,42 @@ Claude:
   audited, Claude integrated the code (mailbox left out — branch copy was
   stale).
 
+## Fase resilience-hardening — agent survives transient errors  ✅ DONE (validated live 2026-05-28, C-016)
+
+Critical accessibility bug found by code review: a transient brain error
+(network timeout, 429, 503, bad key) propagated up from HandleUtterance and
+TERMINATED the process — a non-sighted user with no keyboard could not
+restart it.
+
+- [x] A recoverable turn error is spoken and swallowed; the loop returns to
+      listening and stays alive. Only a cancelled context (real shutdown /
+      barge) stops it. `spokenError()` classifies the failure (connection /
+      saturation / auth / permission) so the user hears a useful message.
+      TTS hiccups are likewise non-fatal.
+- [x] Tests: handler error keeps the agent listening; shutdown still exits
+      cleanly; spokenError classification by kind.
+- [x] Live proof (C-016): with a deliberately invalid key, the agent logged
+      `turn.error`, did NOT crash or return to the shell, and relistened on
+      the next activation.
+
+## Read documents aloud — read_pdf + section nav + translation  — code done, live validation pending (C-017)
+
+The core use case: a user who cannot see asks "léeme la sección X" of an
+open document and hears it, translated to Spanish if the source is English.
+
+- [x] `internal/tools/pdf.go` — read_pdf extracts PDF text via macOS-native
+      PDFKit (JXA / osascript), no dependency to install. Scanned/image PDF
+      returns a clear hint to fall back to a screenshot. Path shell-quoted.
+- [x] System prompt: read ONLY the requested section (Chrome: find the
+      heading, read to the next; PDF: path from Preview → read_pdf → locate
+      section). Real-time translation to Spanish unless the user asks for
+      the original language.
+- [x] Tests (mock OS adapter): extraction, scanned hint, missing file,
+      traversal rejection, truncation, shell-quote escaping. Green -race.
+- [ ] Live validation (C-017): the JXA/PDFKit path runs only on macOS;
+      confirm extraction works on a real English PDF and the section is read
+      back in Spanish.
+
 ## Fase 0.4.2B — Streaming TTS (deferred)
 
 - [ ] Stream the reply to TTS sentence-by-sentence so the user hears the
@@ -227,7 +263,15 @@ Claude:
       slow deep-brain answers). Needs a Brain.ChatStream variant + a
       pipeline that pipes blocks to TTS; bigger change, kept separate.
 
-## Fase 1 — Sub-agents (delegate_task)  — increment 1 done (live validation pending)
+## Fase 1 — Sub-agents (delegate_task)  — increment 1 ✅ DONE (validated live 2026-05-28, X-012)
+
+Live proof (X-012): both file-creation turns called delegate_task and the
+sub-agent ran `write_file` (not the frontal via run_applescript) — the
+X-010 regression is fixed. Two files landed on the Desktop
+("Transistor - cinco puntos.txt", "Transistores - 5 puntos.txt"); "abre
+Mensajes" stayed on the frontal with open_app (no delegation). Cost
+$0.217192 for the session. The X-010 fix (delegate_task as a hard rule:
+explicit override + any file write + multi-step) held in voice.
 
 The big capability leap from the original vision ("study a whole book",
 "build an app", "analyze a circuit in depth"). The frontal agent stays
@@ -254,10 +298,14 @@ times and reports back a summary the frontal reads aloud. User chose
 - [x] Tests: runner (tool loop, MaxRounds cap, ctx cancel), file tools
       (write+read, system-path refusal, traversal refusal, truncation),
       delegate tool (task passthrough, empty, nil, error). All green -race.
-- [ ] Live validation (C-013): a real delegated task on the Mac (e.g.
-      "escribe en un archivo un resumen de 5 puntos sobre los transistores"
-      or a small multi-step job) — confirm it works end to end and the
-      frontal narrates the summary.
+- [x] Live validation (C-014, X-012): both file-creation turns delegated;
+      sub-agent wrote the files; "abre Mensajes" did not delegate. The
+      stronger delegate_task rule (C-013/X-010 fix) held in voice.
+- [x] Deeper regression tests integrated from Codex (C-015): write_file
+      end-to-end with a mock brain, ctx-cancel during a blocking brain call,
+      MaxRounds now returns a clear error (surfaced to the frontal as a tool
+      error it narrates), home-expansion + overwrite, all system roots, and
+      the default 200 KiB read_file truncation. All green -race.
 
 Known limits of increment 1 (honest):
 - No mid-task voice narration: delegate_task blocks while the sub-agent
