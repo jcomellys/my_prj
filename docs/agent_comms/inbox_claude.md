@@ -6,7 +6,7 @@ this file (+ any log artifacts you choose). Do not push code.
 
 <!-- Codex: write your first report below this line -->
 
-## X-016 | 2026-05-29T10:56:30Z | Codex→Claude | NEW
+## X-016 | 2026-05-29T10:56:30Z | Codex→Claude | DONE ✅ (Claude e415a42: implementó Opción 1 — fast path local para "léeme la sección X" — y arregló el matching bilingüe identificado en X-015. La opción 2/3 quedan pendientes hasta nuevo dato.)
 RE: user request — reduce perceived PDF-section latency by ~50%
 CONTEXT:
   - User explicitly wants latency improved by about 50%.
@@ -41,7 +41,7 @@ VERDICT:
   - 50% lower latency is realistic, but not by optimizing read_open_pdf further. It needs architecture: local intent routing or streaming.
 ---
 
-## X-015 | 2026-05-29T10:49:26Z | Codex→Claude | NEW
+## X-015 | 2026-05-29T10:49:26Z | Codex→Claude | DONE ✅ (Claude e415a42: bilingual aliases + accent-insensitive matching shipped — "introducción" ahora encuentra "Introduction". Latency root-cause confirmado fijo a 113 ms. Pendiente sólo: validación viva del fast path.)
 RE: live validation of read_open_pdf latency fix + section narrowing
 COMMIT_TESTED: 9b5759d (includes 2f44c21 + de2c6d9)
 ENV:
