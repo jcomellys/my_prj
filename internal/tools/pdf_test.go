@@ -149,6 +149,52 @@ func TestReadOpenPDF_FindsViaLsofAndExtracts(t *testing.T) {
 	}
 }
 
+func TestReadOpenPDF_SectionReturnsOnlyThatPart(t *testing.T) {
+	full := "Resumen\nbla bla bla.\n" + "Introducción\nLos transistores amplifican señales. " + strings.Repeat("X", 5000)
+	osa := &scriptedOS{lsofOut: "/tmp/p.pdf", pdfText: full}
+	out, err := NewReadOpenPDF(osa).Execute(context.Background(), `{"section":"Introducción"}`)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.HasPrefix(out.Text, "Introducción") {
+		t.Errorf("section result must start at the heading, got %q", out.Text[:30])
+	}
+	if strings.Contains(out.Text, "Resumen") {
+		t.Errorf("section result must NOT include earlier sections, got %q", out.Text[:30])
+	}
+	if len(out.Text) > sectionWindowBytes+40 {
+		t.Errorf("section must be bounded (%d), got %d bytes", sectionWindowBytes, len(out.Text))
+	}
+}
+
+func TestReadOpenPDF_SectionNotFound(t *testing.T) {
+	osa := &scriptedOS{lsofOut: "/tmp/p.pdf", pdfText: "Solo hay un resumen aquí."}
+	out, err := NewReadOpenPDF(osa).Execute(context.Background(), `{"section":"Conclusiones"}`)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(out.Text), "no encontré la sección") {
+		t.Errorf("expected a 'section not found' message, got %q", out.Text)
+	}
+}
+
+func TestReadOpenPDF_MultipleAsksWhich(t *testing.T) {
+	osa := &scriptedOS{lsofOut: "/Users/j/a.pdf\n/Users/j/b.pdf\n/Users/j/a.pdf\n"} // dup on purpose
+	out, err := NewReadOpenPDF(osa).Execute(context.Background(), `{}`)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(out.Text, "varios PDFs") {
+		t.Errorf("expected an ask-which message, got %q", out.Text)
+	}
+	if !strings.Contains(out.Text, "a.pdf") || !strings.Contains(out.Text, "b.pdf") {
+		t.Errorf("expected both file names listed, got %q", out.Text)
+	}
+	if strings.Contains(osa.gotPDF, "PDFDocument") {
+		t.Error("must not extract any PDF until the user picks one")
+	}
+}
+
 func TestReadOpenPDF_NoOpenPDF(t *testing.T) {
 	osa := &scriptedOS{lsofOut: "  \n"} // lsof found nothing
 	_, err := NewReadOpenPDF(osa).Execute(context.Background(), `{}`)

@@ -36,15 +36,15 @@ func NewReadPDF(os osadapter.Adapter) *ReadPDF {
 func (ReadPDF) Spec() brain.ToolSpec {
 	return brain.ToolSpec{
 		Name: "read_pdf",
-		Description: "Extract the text of a PDF file so it can be read aloud to the user. " +
-			"To read a PDF the user has open, first get its path from Preview via run_applescript " +
-			"(`tell application \"Preview\" to get path of front document`), then call this with that path. " +
-			"Also works for any .pdf on disk. Returns the document text; locate the requested section in it. " +
-			"If it returns empty, the PDF is scanned (image-only) — offer to read it via a screenshot instead.",
+		Description: "Extract text from a PDF at a KNOWN path (the user gave it, or it's on disk) so it can be read aloud. " +
+			"For a PDF the user has OPEN in Preview, use read_open_pdf instead (don't script Preview for the path). " +
+			"Pass 'section' to get only that section (recommended — faster, cheaper than the whole document). " +
+			"If it returns empty, the PDF is scanned (image-only) — offer a screenshot instead.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"path": map[string]any{"type": "string", "description": "Absolute or ~-relative path to the .pdf file."},
+				"path":    map[string]any{"type": "string", "description": "Absolute or ~-relative path to the .pdf file."},
+				"section": map[string]any{"type": "string", "description": "Optional: a heading/title to return only that part of the document."},
 			},
 			"required":             []string{"path"},
 			"additionalProperties": false,
@@ -60,7 +60,8 @@ const pdfTextJXA = `function run(argv){ObjC.import("Quartz");try{var u=$.NSURL.f
 
 func (t *ReadPDF) Execute(ctx context.Context, argsJSON string) (Result, error) {
 	var args struct {
-		Path string `json:"path"`
+		Path    string `json:"path"`
+		Section string `json:"section"`
 	}
 	if err := UnmarshalArgs(argsJSON, &args); err != nil {
 		return Result{}, err
@@ -76,7 +77,7 @@ func (t *ReadPDF) Execute(ctx context.Context, argsJSON string) (Result, error) 
 	if info.IsDir() {
 		return Result{}, fmt.Errorf("read_pdf: %s es una carpeta, no un PDF", p)
 	}
-	return extractPDFResult(ctx, t.OS, p, t.MaxBytes)
+	return extractPDFResult(ctx, t.OS, p, t.MaxBytes, args.Section)
 }
 
 // ReadOpenPDF reads the PDF currently open in Preview WITHOUT scripting
@@ -100,42 +101,67 @@ func (ReadOpenPDF) Spec() brain.ToolSpec {
 		Description: "Read the PDF the user currently has open in Preview, aloud-ready. Use this for " +
 			"\"léeme este PDF\" / \"léeme la sección X\" when a PDF is on screen — it finds the open file and " +
 			"extracts its text in one fast step. Do NOT script Preview for the path (that hangs). " +
-			"Locate the requested section in the returned text. Empty result = scanned/image PDF: offer a screenshot.",
+			"Pass 'section' to get only that section (recommended — faster, cheaper than the whole document). " +
+			"If several PDFs are open it asks which; empty result = scanned/image PDF (offer a screenshot).",
 		Schema: map[string]any{
-			"type":                 "object",
-			"properties":           map[string]any{},
+			"type": "object",
+			"properties": map[string]any{
+				"section": map[string]any{"type": "string", "description": "Optional: a heading/title to return only that part."},
+			},
 			"additionalProperties": false,
 		},
 	}
 }
 
-func (t *ReadOpenPDF) Execute(ctx context.Context, _ string) (Result, error) {
-	path, err := frontmostPreviewPDF(ctx, t.OS)
+func (t *ReadOpenPDF) Execute(ctx context.Context, argsJSON string) (Result, error) {
+	var args struct {
+		Section string `json:"section"`
+	}
+	_ = UnmarshalArgs(argsJSON, &args) // section is optional; "{}" is fine
+
+	paths, err := openPreviewPDFs(ctx, t.OS)
 	if err != nil {
 		return Result{}, err
 	}
-	return extractPDFResult(ctx, t.OS, path, t.MaxBytes)
+	switch len(paths) {
+	case 0:
+		return Result{}, fmt.Errorf("read_open_pdf: no encontré un PDF abierto en Vista Previa. Pídele al usuario que lo abra, o usa read_pdf con la ruta")
+	case 1:
+		return extractPDFResult(ctx, t.OS, paths[0], t.MaxBytes, args.Section)
+	default:
+		// Several PDFs open: don't guess which is frontmost. Ask, and give the
+		// paths so the model can call read_pdf with the chosen one.
+		names := make([]string, len(paths))
+		for i, p := range paths {
+			names[i] = baseName(p)
+		}
+		return Result{Text: fmt.Sprintf(
+			"Hay varios PDFs abiertos: %s. Pregúntale al usuario cuál leer y usa read_pdf con su ruta. Rutas: %s",
+			strings.Join(names, ", "), strings.Join(paths, " | "))}, nil
+	}
 }
 
-// frontmostPreviewPDF returns the path of a PDF open in Preview, found via
-// lsof — fast and with no Automation consent prompt. Returns the first match;
-// if several PDFs are open it may not be the frontmost, which is acceptable
-// for the common single-document case.
-func frontmostPreviewPDF(ctx context.Context, osa osadapter.Adapter) (string, error) {
-	// lsof -c Preview lists files held by the Preview process; -Fn prints
-	// name lines as "n/path". Keep .pdf paths, strip the leading "n".
-	out, err := osa.RunShell(ctx, `lsof -c Preview -Fn 2>/dev/null | grep -i '\.pdf$' | sed 's/^n//' | head -n1`)
+// openPreviewPDFs returns the unique paths of PDFs open in Preview, found via
+// lsof — fast, deterministic, and with no Automation consent prompt (it never
+// scripts Preview, which is what blocked ~87s live).
+func openPreviewPDFs(ctx context.Context, osa osadapter.Adapter) ([]string, error) {
+	// lsof -c Preview lists files held by Preview; -Fn prints name lines as
+	// "n/path". Keep .pdf paths and strip the leading "n".
+	out, err := osa.RunShell(ctx, `lsof -c Preview -Fn 2>/dev/null | grep -i '\.pdf$' | sed 's/^n//'`)
 	if err != nil {
-		return "", fmt.Errorf("read_open_pdf: no pude inspeccionar Vista Previa: %w", err)
+		return nil, fmt.Errorf("read_open_pdf: no pude inspeccionar Vista Previa: %w", err)
 	}
-	path := strings.TrimSpace(out)
-	if i := strings.IndexByte(path, '\n'); i >= 0 {
-		path = path[:i]
+	seen := map[string]bool{}
+	var paths []string
+	for _, line := range strings.Split(out, "\n") {
+		p := strings.TrimSpace(line)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		paths = append(paths, p)
 	}
-	if path == "" {
-		return "", fmt.Errorf("read_open_pdf: no encontré un PDF abierto en Vista Previa. Pídele al usuario que lo abra, o usa la ruta con read_pdf")
-	}
-	return path, nil
+	return paths, nil
 }
 
 // extractPDFText runs PDFKit (via JXA) over a path and returns the trimmed
@@ -151,15 +177,26 @@ func extractPDFText(ctx context.Context, osa osadapter.Adapter, path string) (st
 	return strings.TrimSpace(out), nil
 }
 
-// extractPDFResult wraps extractPDFText with the scanned-PDF hint and the
-// output bound shared by both PDF tools.
-func extractPDFResult(ctx context.Context, osa osadapter.Adapter, path string, maxBytes int) (Result, error) {
+// sectionWindowBytes bounds how much text a section request returns, keeping
+// the model's second round small (the predicted next latency neck).
+const sectionWindowBytes = 2500
+
+// extractPDFResult wraps extractPDFText with the scanned-PDF hint, optional
+// section narrowing, and the output bound shared by both PDF tools.
+func extractPDFResult(ctx context.Context, osa osadapter.Adapter, path string, maxBytes int, section string) (Result, error) {
 	out, err := extractPDFText(ctx, osa, path)
 	if err != nil {
 		return Result{}, fmt.Errorf("read_pdf: %w", err)
 	}
 	if out == "" {
 		return Result{Text: "(El PDF no tiene texto extraíble; probablemente está escaneado como imagen. Sugiere leerlo con una captura de pantalla.)"}, nil
+	}
+	if section = strings.TrimSpace(section); section != "" {
+		narrowed, found := narrowToSection(out, section)
+		if !found {
+			return Result{Text: fmt.Sprintf("No encontré la sección %q en el PDF. Pídele al usuario el título exacto, o léelo desde el inicio.", section)}, nil
+		}
+		return Result{Text: narrowed}, nil
 	}
 	if maxBytes <= 0 {
 		maxBytes = 200 * 1024
@@ -168,6 +205,33 @@ func extractPDFResult(ctx context.Context, osa osadapter.Adapter, path string, m
 		out = out[:maxBytes] + "\n…(truncated)"
 	}
 	return Result{Text: out}, nil
+}
+
+// narrowToSection returns a bounded window of text starting at the first
+// case-insensitive occurrence of section, so a "léeme la sección X" request
+// sends only that part to the model instead of the whole document.
+func narrowToSection(text, section string) (string, bool) {
+	idx := strings.Index(strings.ToLower(text), strings.ToLower(section))
+	if idx < 0 {
+		return "", false
+	}
+	end := idx + sectionWindowBytes
+	if end > len(text) {
+		end = len(text)
+	}
+	out := text[idx:end]
+	if end < len(text) {
+		out += "\n…(continúa)"
+	}
+	return out, true
+}
+
+// baseName returns the file name component of a path (no path import churn).
+func baseName(p string) string {
+	if i := strings.LastIndexByte(p, '/'); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
 
 // shellQuote wraps s in single quotes for /bin/sh, escaping any embedded
