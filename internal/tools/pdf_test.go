@@ -167,6 +167,50 @@ func TestReadOpenPDF_SectionReturnsOnlyThatPart(t *testing.T) {
 	}
 }
 
+// TestReadOpenPDF_BilingualSectionMatch covers the live failure from X-014:
+// the user said "introducción" (Spanish) but the PDF's heading was
+// "Introduction" (English). The narrow must still find it.
+func TestReadOpenPDF_BilingualSectionMatch(t *testing.T) {
+	full := "Abstract\nShort summary.\n\nIntroduction\nTransistors amplify signals. " + strings.Repeat("X", 4000)
+	osa := &scriptedOS{lsofOut: "/tmp/p.pdf", pdfText: full}
+	out, err := NewReadOpenPDF(osa).Execute(context.Background(), `{"section":"introducción"}`)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.HasPrefix(out.Text, "Introduction") {
+		t.Errorf("expected the section to start at the English heading, got %q", out.Text[:30])
+	}
+	if strings.Contains(out.Text, "Abstract") {
+		t.Errorf("must not include the earlier Abstract section")
+	}
+}
+
+// TestReadOpenPDF_AccentInsensitiveSectionMatch: STT may drop the accent, so
+// "introduccion" must still find an "Introducción" heading.
+func TestReadOpenPDF_AccentInsensitiveSectionMatch(t *testing.T) {
+	full := "Resumen\ncorto.\n\nIntroducción\nLos transistores amplifican. " + strings.Repeat("X", 4000)
+	osa := &scriptedOS{lsofOut: "/tmp/p.pdf", pdfText: full}
+	out, err := NewReadOpenPDF(osa).Execute(context.Background(), `{"section":"introduccion"}`)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.HasPrefix(out.Text, "Introducción") {
+		t.Errorf("expected to find the accented heading from a non-accented request, got %q", out.Text[:30])
+	}
+}
+
+func TestFoldedIndex_PreservesOriginalOffset(t *testing.T) {
+	// "Introducción" in UTF-8: ó = 2 bytes, so the heading starts at byte 16
+	// (after "Resumen\ncorto.\n\n"). The folded version is shorter, but the
+	// returned offset must point into the ORIGINAL string so slicing works.
+	text := "Resumen\ncorto.\n\nIntroducción\nbody"
+	idx := foldedIndex(text, "introduccion")
+	want := strings.Index(text, "Introducción")
+	if idx != want {
+		t.Errorf("foldedIndex = %d, want %d (original byte offset of accented heading)", idx, want)
+	}
+}
+
 func TestReadOpenPDF_SectionNotFound(t *testing.T) {
 	osa := &scriptedOS{lsofOut: "/tmp/p.pdf", pdfText: "Solo hay un resumen aquí."}
 	out, err := NewReadOpenPDF(osa).Execute(context.Background(), `{"section":"Conclusiones"}`)

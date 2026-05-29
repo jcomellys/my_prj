@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
 	"github.com/jcomellys/voice-mac-agent/internal/osadapter"
@@ -207,23 +208,106 @@ func extractPDFResult(ctx context.Context, osa osadapter.Adapter, path string, m
 	return Result{Text: out}, nil
 }
 
-// narrowToSection returns a bounded window of text starting at the first
-// case-insensitive occurrence of section, so a "léeme la sección X" request
-// sends only that part to the model instead of the whole document.
+// narrowToSection returns a bounded window of text at the requested heading,
+// tolerant to case, Spanish accents, and Spanish↔English heading aliases —
+// so "introducción" finds an "Introduction" heading, and vice versa (a real
+// failure observed live).
 func narrowToSection(text, section string) (string, bool) {
-	idx := strings.Index(strings.ToLower(text), strings.ToLower(section))
-	if idx < 0 {
-		return "", false
+	for _, cand := range sectionCandidates(section) {
+		if idx := foldedIndex(text, cand); idx >= 0 {
+			end := idx + sectionWindowBytes
+			if end > len(text) {
+				end = len(text)
+			}
+			out := text[idx:end]
+			if end < len(text) {
+				out += "\n…(continúa)"
+			}
+			return out, true
+		}
 	}
-	end := idx + sectionWindowBytes
-	if end > len(text) {
-		end = len(text)
+	return "", false
+}
+
+// sectionCandidates returns the requested name plus cross-language aliases
+// (Introducción↔Introduction, Resumen↔Abstract…). The original is tried first
+// so an exact heading match wins when both languages are present.
+func sectionCandidates(section string) []string {
+	section = strings.TrimSpace(section)
+	out := []string{section}
+	key := stripAccents(strings.ToLower(section))
+	for _, a := range sectionAliases[key] {
+		if a != section {
+			out = append(out, a)
+		}
 	}
-	out := text[idx:end]
-	if end < len(text) {
-		out += "\n…(continúa)"
+	return out
+}
+
+// sectionAliases maps a normalized (lower, accent-free) section name to its
+// known equivalents in the other language. Covers the headings common to the
+// docs the user reads (papers, manuals, articles).
+var sectionAliases = map[string][]string{
+	"introduccion":    {"introduction", "introducción"},
+	"introduction":    {"introducción", "introduccion"},
+	"resumen":         {"abstract", "summary"},
+	"abstract":        {"resumen", "summary"},
+	"summary":         {"resumen", "abstract"},
+	"conclusion":      {"conclusión", "conclusions", "conclusiones"},
+	"conclusiones":    {"conclusions", "conclusion", "conclusión"},
+	"conclusions":     {"conclusiones", "conclusion", "conclusión"},
+	"metodologia":     {"methodology", "methods", "métodos"},
+	"methodology":     {"metodología", "metodologia", "methods"},
+	"metodos":         {"methods", "methodology", "metodología"},
+	"methods":         {"métodos", "metodos", "methodology"},
+	"resultados":      {"results"},
+	"results":         {"resultados"},
+	"discusion":       {"discussion"},
+	"discussion":      {"discusión", "discusion"},
+	"referencias":     {"references", "bibliography", "bibliografía"},
+	"references":     {"referencias", "bibliography", "bibliografía"},
+	"bibliografia":   {"bibliography", "references", "referencias"},
+	"bibliography":   {"bibliografía", "bibliografia", "references"},
+	"agradecimientos": {"acknowledgments", "acknowledgements"},
+	"acknowledgments": {"agradecimientos"},
+	"acknowledgements": {"agradecimientos"},
+}
+
+// foldedIndex finds needle in text, ignoring case AND Spanish accents,
+// returning the byte offset in the ORIGINAL text (not the folded version).
+// -1 if not found. Builds a position map so the offset survives the
+// accent-collapse (á → a goes from 2 bytes to 1).
+func foldedIndex(text, needle string) int {
+	fNeedle := stripAccents(strings.ToLower(needle))
+	if fNeedle == "" {
+		return -1
 	}
-	return out, true
+	var folded strings.Builder
+	var offsets []int // offsets[i] = byte index in text where folded byte i came from
+	for i := 0; i < len(text); {
+		r, size := utf8.DecodeRuneInString(text[i:])
+		s := stripAccents(strings.ToLower(string(r)))
+		for b := 0; b < len(s); b++ {
+			offsets = append(offsets, i)
+		}
+		folded.WriteString(s)
+		i += size
+	}
+	pos := strings.Index(folded.String(), fNeedle)
+	if pos < 0 {
+		return -1
+	}
+	return offsets[pos]
+}
+
+// stripAccents folds the Spanish accented letters and ñ to their ASCII base
+// so heading matching is robust to STT dropping accents and to PDFs using
+// either spelling. Only the letters that actually appear in Spanish headings.
+func stripAccents(s string) string {
+	return strings.NewReplacer(
+		"á", "a", "é", "e", "í", "i", "ó", "o", "ú", "u", "ü", "u", "ñ", "n",
+		"Á", "A", "É", "E", "Í", "I", "Ó", "O", "Ú", "U", "Ü", "U", "Ñ", "N",
+	).Replace(s)
 }
 
 // baseName returns the file name component of a path (no path import churn).

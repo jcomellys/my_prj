@@ -151,6 +151,11 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 
 	o.history = append(o.history, brain.Message{Role: brain.RoleUser, Content: userText})
 
+	// Fast paths: detect simple intents and pre-run the matching tool in Go,
+	// removing a brain round-trip that exists only to pick a tool. The brain
+	// loop's first call then becomes the response round (one round, not two).
+	o.tryFastPath(ctx, userText)
+
 	activeBrain := o.Brain
 
 	for round := 0; round < o.MaxRounds; round++ {
