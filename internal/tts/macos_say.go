@@ -50,7 +50,24 @@ func (m *MacOSSay) Speak(ctx context.Context, text string) error {
 	if runner == nil {
 		runner = execRun
 	}
+	// Speak sentence by sentence so the user hears the first words almost
+	// immediately, instead of waiting for the whole reply to synthesize. Each
+	// chunk is still synthesized to a complete file and played whole, so the
+	// end never clips. Barge-in is checked between chunks (and CommandContext
+	// kills the in-flight say/afplay).
+	for _, chunk := range splitSentences(text) {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err := m.speakChunk(ctx, runner, chunk); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+// speakChunk synthesizes one chunk to a temp AIFF and plays the finished file.
+func (m *MacOSSay) speakChunk(ctx context.Context, runner func(context.Context, string, ...string) error, text string) error {
 	f, err := os.CreateTemp("", "vma-tts-*.aiff")
 	if err != nil {
 		// Can't stage a file — fall back to speaking directly. Still better
@@ -88,6 +105,42 @@ play:
 		return fmt.Errorf("afplay: %w", err)
 	}
 	return nil
+}
+
+// splitSentences breaks text at sentence boundaries so playback can start
+// after the first sentence. A '.'/'!'/'?' only ends a sentence when followed
+// by whitespace or end-of-text, so decimals and "$0.38" stay intact.
+func splitSentences(text string) []string {
+	runes := []rune(text)
+	var out []string
+	var cur strings.Builder
+	flush := func() {
+		if s := strings.TrimSpace(cur.String()); s != "" {
+			out = append(out, s)
+		}
+		cur.Reset()
+	}
+	for i, r := range runes {
+		cur.WriteRune(r)
+		end := r == '\n' || r == '…'
+		if (r == '.' || r == '!' || r == '?') && (i+1 >= len(runes) || isSpaceRune(runes[i+1])) {
+			end = true
+		}
+		if end {
+			flush()
+		}
+	}
+	flush()
+	if len(out) == 0 {
+		if s := strings.TrimSpace(text); s != "" {
+			out = []string{s}
+		}
+	}
+	return out
+}
+
+func isSpaceRune(r rune) bool {
+	return r == ' ' || r == '\t' || r == '\n' || r == '\r'
 }
 
 // synthArgs builds the `say` arguments to write speech to outPath.

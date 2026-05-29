@@ -13,11 +13,15 @@ type recordingRunner struct {
 	calls   [][]string // each entry: [name, arg, arg, ...]
 	failOn  int        // 1-based call index to fail; 0 = never
 	failErr error
+	onCall  func() // invoked when the failOn call happens (e.g. to cancel ctx)
 }
 
 func (r *recordingRunner) run(_ context.Context, name string, args ...string) error {
 	r.calls = append(r.calls, append([]string{name}, args...))
 	if r.failOn == len(r.calls) {
+		if r.onCall != nil {
+			r.onCall()
+		}
 		if r.failErr != nil {
 			return r.failErr
 		}
@@ -76,17 +80,18 @@ func TestSpeak_EmptyTextDoesNothing(t *testing.T) {
 }
 
 func TestSpeak_BargeInDuringSynthSkipsPlayback(t *testing.T) {
-	r := &recordingRunner{failOn: 1, failErr: context.Canceled}
-	s := newSay("Mónica", 0, r)
-
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // already cancelled: synth "fails" with ctx error
+	// Cancel mid-synth (call 1) and have say report the cancellation, exactly
+	// like a barge-in killing the in-flight process.
+	r := &recordingRunner{failOn: 1, failErr: context.Canceled, onCall: cancel}
+	s := newSay("Mónica", 0, r)
 
 	err := s.Speak(ctx, "una respuesta larga")
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
-	// Only the synth call should have run; afplay must be skipped.
+	// Only the synth call should have run; afplay (and the bad-voice retry)
+	// must be skipped because the context is now cancelled.
 	if len(r.calls) != 1 {
 		t.Errorf("expected only the synth call, got %v", r.calls)
 	}
@@ -118,4 +123,35 @@ func contains(ss []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestSplitSentences_StartsAfterFirstSentence(t *testing.T) {
+	got := splitSentences("Uno. Dos. Tres.")
+	if len(got) != 3 {
+		t.Fatalf("expected 3 sentences, got %d: %v", len(got), got)
+	}
+	if got[0] != "Uno." {
+		t.Errorf("first chunk should be a single sentence for fast start, got %q", got[0])
+	}
+}
+
+func TestSplitSentences_KeepsDecimalsAndMoney(t *testing.T) {
+	// A '.' not followed by whitespace must NOT split — otherwise "$0.38" and
+	// "8.54" get chopped and read wrong.
+	got := splitSentences("Cuesta 0.38 dólares en total.")
+	if len(got) != 1 {
+		t.Fatalf("decimal must not split the sentence, got %d: %v", len(got), got)
+	}
+}
+
+func TestSpeak_MultiSentencePlaysEachChunk(t *testing.T) {
+	r := &recordingRunner{}
+	s := newSay("", 0, r)
+	if err := s.Speak(context.Background(), "Hola. ¿Qué tal? Bien."); err != nil {
+		t.Fatalf("Speak: %v", err)
+	}
+	// 3 sentences => 3 synth + 3 play = 6 commands.
+	if len(r.calls) != 6 {
+		t.Fatalf("expected 6 commands for 3 sentences, got %d: %v", len(r.calls), r.calls)
+	}
 }

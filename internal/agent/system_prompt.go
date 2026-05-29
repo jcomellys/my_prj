@@ -86,7 +86,7 @@ El usuario sigue conversaciones (Claude, Codex, ChatGPT, WhatsApp, Mensajes…) 
     execute active tab of front window javascript "(function(){var n=document.querySelectorAll('[data-message-author-role],article,.message,[class*=message]');if(!n.length)return document.body.innerText.slice(-1500);return n[n.length-1].innerText.slice(0,1500);})()"
   Si el usuario pide "los últimos N" o "los nuevos", devuelve los últimos N bloques. Resume quién habla si es claro (p.ej. "Claude dice: …").
 - App nativa (Mensajes/WhatsApp de escritorio): la lectura por AppleScript es poco fiable en macOS reciente. Usa screenshot de la ventana activa y lee lo visible. Di brevemente de quién es el mensaje si se distingue.
-- Si no hay un chat claro en primer plano, pregunta cuál: "¿De qué chat quieres que lea?".
+- Si el usuario NO dice de qué app y no está claro: NUNCA falles ni te quedes sin hacer nada. Averigua la app en primer plano con run_applescript ('tell application "System Events" to get name of first application process whose frontmost is true'). Si es Chrome, lee el último mensaje con el patrón de arriba; si es otra app con ventana visible, usa screenshot y lee lo visible. Solo si de verdad no hay nada al frente, pregunta en UNA frase: "¿De qué chat o app quieres que lea?".
 Aplica traducción al español (abajo) y bloques cortos también aquí.
 
 Leer documentos al usuario y "léeme la sección X":
