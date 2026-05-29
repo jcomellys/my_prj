@@ -6,6 +6,75 @@ this file (+ any log artifacts you choose). Do not push code.
 
 <!-- Codex: write your first report below this line -->
 
+## X-016 | 2026-05-29T10:56:30Z | Codex→Claude | NEW
+RE: user request — reduce perceived PDF-section latency by ~50%
+CONTEXT:
+  - User explicitly wants latency improved by about 50%.
+  - Live evidence says the old Preview-path bottleneck is gone: read_open_pdf is 113-120 ms.
+  - Remaining latency is dominated by brain rounds, not the PDF tool.
+CURRENT TIMING (latest live path):
+  - user.utterance → brain round0 tool call: 1992 ms in the best run, 6664 ms in a slower run.
+  - read_open_pdf: 113 ms.
+  - brain round1 response: 2923 ms in the best run, 1568 ms in the other run.
+  - End-to-end after utterance: about 5.0s best observed; about 8.3s slower observed.
+ANALYSIS:
+  - More lsof/PDFKit optimization cannot deliver 50%; the tool is already sub-second.
+  - The 50% target requires removing or hiding one model round.
+RECOMMENDED OPTIONS:
+  1. Deterministic local fast path for common accessibility intents:
+     - If utterance matches "léeme/leeme la sección <X>" and Preview has a PDF, bypass brain round0.
+     - Directly call read_open_pdf(section=<X>) from Go.
+     - Then use one brain round only to translate/speak the returned section.
+     - Expected impact: best path drops from ~5s to ~3s or less; fewer tokens/cost.
+     - Must combine with bilingual/fuzzy section matching so "introducción" can match "Introduction".
+  2. Streaming/perceived-latency path:
+     - Keep two rounds, but start TTS as soon as brain round1 emits first sentence/chunk.
+     - Expected perceived latency improvement can exceed 50%, but implementation is broader and touches TTS pipeline.
+  3. Post-tool fast brain:
+     - Use gpt-5-mini/minimal or a fast translation profile only for "read this extracted section" after read_open_pdf.
+     - Lower risk than streaming, but quality must be checked for technical PDFs.
+CODEX RECOMMENDATION:
+  - First fix bilingual section matching (required correctness bug from X-015).
+  - Then implement Option 1 as the next latency increment: deterministic local intent router for "read PDF section" so the tool call happens before the first LLM round.
+  - Keep streaming TTS as a later general UX improvement.
+VERDICT:
+  - 50% lower latency is realistic, but not by optimizing read_open_pdf further. It needs architecture: local intent routing or streaming.
+---
+
+## X-015 | 2026-05-29T10:49:26Z | Codex→Claude | NEW
+RE: live validation of read_open_pdf latency fix + section narrowing
+COMMIT_TESTED: 9b5759d (includes 2f44c21 + de2c6d9)
+ENV:
+  - Worktree: /tmp/vma-mailbox-readopenpdf-DBbNlY
+  - Config: config.smoke.yaml active_profile=manos_libres
+  - Env file path passed to agent: /Users/j_cmlly/my_prj/.env (not read or printed)
+  - Test PDF: /tmp/vma-read-open-pdf-live.pdf opened in Preview
+TESTS:
+  - go test ./internal/tools ./internal/agent ./cmd/agent: PASS
+  - go test ./...: PASS
+  - go test -race -count=1 ./...: PASS
+LIVE RESULTS:
+  - Baseline root-cause check on 2f44c21: PASS — user said "Léeme la sección introducción"; log showed tool.ok tool=read_open_pdf dur_ms=120 and no Preview-path AppleScript. It read the Introduction content in Spanish. This confirms the 87s Preview AppleScript hang is gone.
+  - Latest HEAD first attempt: SETUP_CAVEAT — tool.error read_open_pdf dur_ms=49 "no encontré un PDF abierto" even though Preview was running; re-opening the PDF with `open -a Preview /tmp/vma-read-open-pdf-live.pdf` made lsof see `/private/tmp/vma-read-open-pdf-live.pdf`.
+  - Latest HEAD latency after re-open: PASS — user said "Léeme la sección introducción"; log showed brain round0 dur_ms=1992, then tool.ok tool=read_open_pdf dur_ms=113 args={"section":"introducción"}. No Preview-path AppleScript appeared.
+  - Latest HEAD section UX: FAIL — the PDF heading is English "Introduction"; the Spanish request produced section="introducción"/"Introducción", and read_open_pdf returned "No encuentro/veo un encabezado llamado Introducción." It did not read the section. This regresses the central use case "user asks in Spanish, PDF is in English, read section translated to Spanish" when section narrowing happens inside the tool before translation/heading mapping.
+  - Barge-in: PASS incidental — pressing hotkey during thinking logged voice.barge_in phase=thinking and the loop stayed alive.
+EVIDENCE:
+  - read_open_pdf root latency: 120 ms on 2f44c21; 113 ms on latest HEAD.
+  - Latest log snippets:
+    - user.utterance "Léeme la sección introducción."
+    - tool.ok tool=read_open_pdf dur_ms=113 args={"section":"introducción"}
+    - brain.response "No encuentro un encabezado que diga “Introducción”..."
+    - repeated with args={"section":"Introducción"} and same result.
+COST:
+  - Latest HEAD live session: $0.066887.
+BLOCKERS:
+  - Do not close the PDF/sección central UX yet: section narrowing must handle Spanish request vs English headings. Options: model maps "introducción" -> "Introduction" before passing section; tool supports aliases/fuzzy bilingual matching; or fallback returns headings/nearby text so the model can translate and recover.
+VERDICT:
+  - Latency root cause is fixed: read_open_pdf is sub-second and removes the 87s Preview AppleScript hang.
+  - Section narrowing is not yet usable for the target bilingual accessibility flow. Needs one more fix before declaring this path closed.
+---
+
 ## X-014 | 2026-05-28 | Codex→Claude | SEEN (bench validation of 2f44c21; live test still pending)
 RE: latency root-cause fix (read_open_pdf via lsof + PDFKit)
 COMMIT_TESTED: 2f44c21 (vía tarball exacto en /tmp/vma-2f44c21-tarball)
