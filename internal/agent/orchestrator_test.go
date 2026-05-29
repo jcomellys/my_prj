@@ -12,6 +12,7 @@ import (
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
 	"github.com/jcomellys/voice-mac-agent/internal/cost"
 	"github.com/jcomellys/voice-mac-agent/internal/tools"
+	"github.com/jcomellys/voice-mac-agent/internal/voice"
 )
 
 // ---------- test doubles ----------
@@ -420,6 +421,43 @@ func (p *pricedBrain) Name() string { return p.name }
 func (p *pricedBrain) Chat(_ context.Context, _ []brain.Message, _ []brain.ToolSpec) (*brain.Response, error) {
 	r := p.resp
 	return &r, nil
+}
+
+// speakingVoice is a voice.Provider that also records interim Speak calls,
+// so we can assert the orchestrator narrates a preamble before slow tools.
+type speakingVoice struct{ spoken []string }
+
+func (*speakingVoice) Name() string                            { return "speaking" }
+func (*speakingVoice) Start(context.Context, voice.Handler) error { return nil }
+func (v *speakingVoice) Speak(_ context.Context, text string) error {
+	v.spoken = append(v.spoken, text)
+	return nil
+}
+
+func TestOrchestrator_NarratesPreambleBeforeTool(t *testing.T) {
+	reg := tools.NewRegistry()
+	probe := &programmableTool{name: "read_pdf", result: "texto del PDF"}
+	reg.Register(probe)
+
+	// First response: a spoken preamble alongside the tool call. Second: final.
+	b := &scriptedBrain{queue: []brain.Response{
+		{Text: "Voy a leer esa sección, dame un momento.",
+			ToolCalls: []brain.ToolCall{{ID: "c1", Name: "read_pdf", Arguments: "{}"}}},
+		{Text: "La introducción dice lo siguiente."},
+	}}
+	v := &speakingVoice{}
+	orch := New(v, b, reg, "system", quietLogger())
+
+	reply, err := orch.HandleUtterance(context.Background(), "léeme la sección introducción")
+	if err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+	if len(v.spoken) != 1 || !strings.Contains(v.spoken[0], "Voy a leer") {
+		t.Errorf("expected the preamble spoken immediately, got %v", v.spoken)
+	}
+	if !strings.Contains(reply, "introducción dice") {
+		t.Errorf("final reply wrong: %q", reply)
+	}
 }
 
 func TestOrchestrator_HistoryGrowsAcrossUtterances(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
 	"github.com/jcomellys/voice-mac-agent/internal/cost"
@@ -159,7 +160,9 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 			specs = append(specs, escalateSpec())
 		}
 
+		brainStart := time.Now()
 		resp, err := activeBrain.Chat(ctx, o.history, specs)
+		brainMs := time.Since(brainStart).Milliseconds()
 		if err != nil {
 			return "", fmt.Errorf("brain: %w", err)
 		}
@@ -176,6 +179,7 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 		o.Log.Info("brain.response",
 			"brain", activeBrain.Name(),
 			"round", round,
+			"dur_ms", brainMs,
 			"text_len", len(resp.Text),
 			"text", truncateForLog(resp.Text, 500),
 			"tool_calls", len(resp.ToolCalls),
@@ -207,6 +211,14 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 			return o.maybeAppendBudgetWarning(resp.Text), nil
 		}
 
+		// Speak the model's preamble immediately (e.g. "Voy a leer esa
+		// sección, dame un momento.") so a non-sighted user is not left in
+		// silence while a slow tool (read_pdf, app scripting) runs. Uses the
+		// turn's ctx, so a barge-in cuts it too.
+		if resp.Text != "" {
+			o.narrate(ctx, resp.Text)
+		}
+
 		// Execute each tool call. The synthetic `escalate` call is handled
 		// by the orchestrator (switch to the deep brain) and never reaches
 		// the registry.
@@ -229,13 +241,15 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 				continue
 			}
 
+			toolStart := time.Now()
 			res, err := o.runTool(ctx, tc)
+			toolMs := time.Since(toolStart).Milliseconds()
 			argsAudit := truncateForLog(tc.Arguments, 800)
 			if err != nil {
 				res = tools.Result{Text: "ERROR: " + err.Error()}
-				o.Log.Warn("tool.error", "tool", tc.Name, "args", argsAudit, "err", err)
+				o.Log.Warn("tool.error", "tool", tc.Name, "dur_ms", toolMs, "args", argsAudit, "err", err)
 			} else {
-				o.Log.Info("tool.ok", "tool", tc.Name, "args", argsAudit, "images", len(res.Images))
+				o.Log.Info("tool.ok", "tool", tc.Name, "dur_ms", toolMs, "args", argsAudit, "images", len(res.Images))
 			}
 			o.history = append(o.history, brain.Message{
 				Role:       brain.RoleTool,
@@ -294,6 +308,17 @@ func (o *Orchestrator) maybeAppendBudgetWarning(reply string) string {
 		return notice
 	}
 	return reply + notice
+}
+
+// narrate speaks an interim message mid-turn if the voice provider supports
+// it (the Pipeline does). Best-effort: failures are ignored so narration
+// never breaks the turn.
+func (o *Orchestrator) narrate(ctx context.Context, text string) {
+	if s, ok := o.Voice.(interface {
+		Speak(context.Context, string) error
+	}); ok {
+		_ = s.Speak(ctx, text)
+	}
 }
 
 func (o *Orchestrator) runTool(ctx context.Context, tc brain.ToolCall) (tools.Result, error) {

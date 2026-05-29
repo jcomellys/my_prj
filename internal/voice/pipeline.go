@@ -64,6 +64,13 @@ func (p *Pipeline) Name() string {
 	return fmt.Sprintf("pipeline(stt=%s,tts=%s,act=%s)", p.STT.Name(), p.TTS.Name(), p.Activator.Name())
 }
 
+// Speak voices an interim message mid-turn (e.g. a "working on it" preamble)
+// through the same TTS as final replies. The orchestrator calls this via an
+// interface assertion. Honors ctx, so a barge-in cuts the preamble too.
+func (p *Pipeline) Speak(ctx context.Context, text string) error {
+	return p.TTS.Speak(ctx, text)
+}
+
 func (p *Pipeline) Start(ctx context.Context, h Handler) error {
 	// skipActivation is set after a barge-in: the interrupting gesture IS the
 	// activation for the next turn, so we go straight to listening.
