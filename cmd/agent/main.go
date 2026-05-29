@@ -124,10 +124,11 @@ func main() {
 	var deepBrain brain.Brain
 	if d := prof.Brain.Deep; d != nil {
 		deep, err := buildBrain(agent.BrainConfig{
-			Provider:    d.Provider,
-			Model:       d.Model,
-			Temperature: d.Temperature,
-			MaxTokens:   d.MaxTokens,
+			Provider:        d.Provider,
+			Model:           d.Model,
+			Temperature:     d.Temperature,
+			MaxTokens:       d.MaxTokens,
+			ReasoningEffort: d.ReasoningEffort,
 		})
 		if err != nil {
 			fatal(log, fmt.Errorf("deep brain: %w", err))
@@ -195,6 +196,7 @@ func buildBrain(c agent.BrainConfig) (brain.Brain, error) {
 		b := brain.NewOpenAI(key, c.Model)
 		b.Temperature = c.Temperature
 		b.MaxTokens = c.MaxTokens
+		b.ReasoningEffort = c.ReasoningEffort
 		return b, nil
 	case "anthropic":
 		key := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))

@@ -148,6 +148,51 @@ func TestOpenAI_ReasoningModelDropsTemperature(t *testing.T) {
 	}
 }
 
+// TestOpenAI_ReasoningEffort verifies reasoning_effort is sent for reasoning
+// models (the big voice-latency lever) and omitted otherwise.
+func TestOpenAI_ReasoningEffort(t *testing.T) {
+	var got string
+	var present bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var raw map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&raw)
+		if v, ok := raw["reasoning_effort"]; ok {
+			present = true
+			got, _ = v.(string)
+		}
+		_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{}}`)
+	}))
+	defer srv.Close()
+
+	cases := []struct {
+		model       string
+		effort      string
+		wantPresent bool
+		wantValue   string
+	}{
+		{"gpt-5", "low", true, "low"},
+		{"gpt-5-mini", "minimal", true, "minimal"},
+		{"o3-mini", "high", true, "high"},
+		{"gpt-5", "", false, ""},      // empty => omit (API default)
+		{"gpt-4o", "low", false, ""},  // non-reasoning model => never sent
+	}
+	for _, c := range cases {
+		present, got = false, ""
+		b := NewOpenAI("k", c.model)
+		b.BaseURL = srv.URL
+		b.ReasoningEffort = c.effort
+		if _, err := b.Chat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil); err != nil {
+			t.Fatalf("Chat(%s,%s): %v", c.model, c.effort, err)
+		}
+		if present != c.wantPresent {
+			t.Errorf("model=%s effort=%q: present=%v want %v", c.model, c.effort, present, c.wantPresent)
+		}
+		if c.wantPresent && got != c.wantValue {
+			t.Errorf("model=%s: sent effort=%q want %q", c.model, got, c.wantValue)
+		}
+	}
+}
+
 func TestOpenAI_APIErrorIsSurfaced(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

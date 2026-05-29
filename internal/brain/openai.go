@@ -22,7 +22,13 @@ type OpenAI struct {
 	BaseURL     string // default https://api.openai.com/v1
 	Temperature float64
 	MaxTokens   int
-	HTTPClient  *http.Client
+	// ReasoningEffort tunes how much a reasoning model (GPT-5 / o-series)
+	// "thinks" before answering: "minimal" | "low" | "medium" | "high".
+	// Lower = much faster responses, which matters enormously for a voice
+	// assistant. Empty = the API default (medium). Ignored by non-reasoning
+	// models.
+	ReasoningEffort string
+	HTTPClient      *http.Client
 }
 
 func NewOpenAI(apiKey, model string) *OpenAI {
@@ -80,11 +86,12 @@ type oaiImageURL struct {
 }
 
 type oaiRequest struct {
-	Model       string       `json:"model"`
-	Messages    []oaiMessage `json:"messages"`
-	Tools       []oaiTool    `json:"tools,omitempty"`
-	Temperature float64      `json:"temperature,omitempty"`
-	MaxTokens   int          `json:"max_completion_tokens,omitempty"`
+	Model           string       `json:"model"`
+	Messages        []oaiMessage `json:"messages"`
+	Tools           []oaiTool    `json:"tools,omitempty"`
+	Temperature     float64      `json:"temperature,omitempty"`
+	MaxTokens       int          `json:"max_completion_tokens,omitempty"`
+	ReasoningEffort string       `json:"reasoning_effort,omitempty"`
 }
 
 type oaiResponse struct {
@@ -131,12 +138,20 @@ func (o *OpenAI) Chat(ctx context.Context, messages []Message, tools []ToolSpec)
 		temp = 0 // 0 gets omitted by omitempty -> API uses default
 	}
 
+	// reasoning_effort only applies to reasoning models; sending it to a
+	// non-reasoning model would be rejected.
+	effort := ""
+	if isReasoningModel(o.Model) {
+		effort = o.ReasoningEffort
+	}
+
 	body := oaiRequest{
-		Model:       o.Model,
-		Messages:    toOAIMessages(messages),
-		Tools:       toOAITools(tools),
-		Temperature: temp,
-		MaxTokens:   o.MaxTokens,
+		Model:           o.Model,
+		Messages:        toOAIMessages(messages),
+		Tools:           toOAITools(tools),
+		Temperature:     temp,
+		MaxTokens:       o.MaxTokens,
+		ReasoningEffort: effort,
 	}
 
 	buf, err := json.Marshal(body)

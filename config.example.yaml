@@ -180,6 +180,12 @@ profiles:
       model: gpt-5
       temperature: 0
       max_tokens: 4096
+      # Velocidad de respuesta para voz: gpt-5 razona en "medium" por defecto,
+      # lo que tarda ~1 min por turno (demasiado para manos libres). "low" da
+      # respuestas rápidas conservando buena calidad; prueba "minimal" si
+      # quieres aún más velocidad en comandos simples. Para razonamiento
+      # profundo, delega al sub-agente (que puede usar más esfuerzo).
+      reasoning_effort: low
     activator:
       kind: hotkey
       hotkey:

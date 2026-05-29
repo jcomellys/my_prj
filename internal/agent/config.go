@@ -63,20 +63,22 @@ type TTSConfig struct {
 }
 
 type BrainConfig struct {
-	Provider    string     `yaml:"provider"` // openai | anthropic | gemini | ollama | mock
-	Model       string     `yaml:"model"`
-	Temperature float64    `yaml:"temperature"`
-	MaxTokens   int        `yaml:"max_tokens"`
-	Deep        *DeepBrain `yaml:"deep"` // optional stronger brain for escalation
+	Provider        string     `yaml:"provider"` // openai | anthropic | gemini | ollama | mock
+	Model           string     `yaml:"model"`
+	Temperature     float64    `yaml:"temperature"`
+	MaxTokens       int        `yaml:"max_tokens"`
+	ReasoningEffort string     `yaml:"reasoning_effort"` // minimal|low|medium|high (GPT-5/o-series); low = faster voice
+	Deep            *DeepBrain `yaml:"deep"`             // optional stronger brain for escalation
 }
 
 // DeepBrain is the escalation target for two-tier routing. When set, the
 // default Brain handles simple turns and escalates hard ones to this model.
 type DeepBrain struct {
-	Provider    string  `yaml:"provider"`
-	Model       string  `yaml:"model"`
-	Temperature float64 `yaml:"temperature"`
-	MaxTokens   int     `yaml:"max_tokens"`
+	Provider        string  `yaml:"provider"`
+	Model           string  `yaml:"model"`
+	Temperature     float64 `yaml:"temperature"`
+	MaxTokens       int     `yaml:"max_tokens"`
+	ReasoningEffort string  `yaml:"reasoning_effort"`
 }
 
 type ActivatorConfig struct {
