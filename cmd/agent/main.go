@@ -101,6 +101,7 @@ func main() {
 	// read_pdf: native macOS PDF text extraction so the agent can read a PDF
 	// (or a section of it) aloud to a user who cannot see the screen.
 	registry.Register(tools.NewReadPDF(osa))
+	registry.Register(tools.NewReadOpenPDF(osa))
 	// type_text: dictate text into the frontmost app via real keystrokes
 	// (works in Claude/ChatGPT/Messages/etc.). Sends only on confirmation.
 	registry.Register(tools.NewTypeText(osa))
@@ -167,6 +168,7 @@ func main() {
 		subReg.Register(tools.NewReadFile())
 		subReg.Register(tools.NewWriteFile())
 		subReg.Register(tools.NewReadPDF(osa))
+		subReg.Register(tools.NewReadOpenPDF(osa))
 		subReg.Register(tools.NewTypeText(osa))
 
 		runner := subagent.New(subBrain, subReg, agent.SubAgentSystemPrompt, log)

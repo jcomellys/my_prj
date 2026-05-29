@@ -76,28 +76,96 @@ func (t *ReadPDF) Execute(ctx context.Context, argsJSON string) (Result, error) 
 	if info.IsDir() {
 		return Result{}, fmt.Errorf("read_pdf: %s es una carpeta, no un PDF", p)
 	}
+	return extractPDFResult(ctx, t.OS, p, t.MaxBytes)
+}
 
-	// osascript -l JavaScript -e '<program>' '<path>'  — path is the argv[0]
-	// the JXA run() receives. Both pieces are single-quoted so the path can
-	// contain spaces or punctuation without breaking the shell.
-	cmd := "osascript -l JavaScript -e " + shellQuote(pdfTextJXA) + " " + shellQuote(p)
-	out, err := t.OS.RunShell(ctx, cmd)
-	if err != nil {
-		return Result{}, fmt.Errorf("read_pdf: %w: %s", err, strings.TrimSpace(out))
+// ReadOpenPDF reads the PDF currently open in Preview WITHOUT scripting
+// Preview. Asking Preview for the path via AppleScript was measured at ~87s
+// live (it blocks on the first-run Automation consent prompt / AppleEvent
+// timeout) — fatal for a voice assistant. Instead we find the open file with
+// `lsof` (sub-second, no consent prompt) and extract text with PDFKit. One
+// deterministic tool call replaces a slow AppleScript round entirely.
+type ReadOpenPDF struct {
+	OS       osadapter.Adapter
+	MaxBytes int
+}
+
+func NewReadOpenPDF(os osadapter.Adapter) *ReadOpenPDF {
+	return &ReadOpenPDF{OS: os, MaxBytes: 200 * 1024}
+}
+
+func (ReadOpenPDF) Spec() brain.ToolSpec {
+	return brain.ToolSpec{
+		Name: "read_open_pdf",
+		Description: "Read the PDF the user currently has open in Preview, aloud-ready. Use this for " +
+			"\"léeme este PDF\" / \"léeme la sección X\" when a PDF is on screen — it finds the open file and " +
+			"extracts its text in one fast step. Do NOT script Preview for the path (that hangs). " +
+			"Locate the requested section in the returned text. Empty result = scanned/image PDF: offer a screenshot.",
+		Schema: map[string]any{
+			"type":                 "object",
+			"properties":           map[string]any{},
+			"additionalProperties": false,
+		},
 	}
-	out = strings.TrimSpace(out)
+}
+
+func (t *ReadOpenPDF) Execute(ctx context.Context, _ string) (Result, error) {
+	path, err := frontmostPreviewPDF(ctx, t.OS)
+	if err != nil {
+		return Result{}, err
+	}
+	return extractPDFResult(ctx, t.OS, path, t.MaxBytes)
+}
+
+// frontmostPreviewPDF returns the path of a PDF open in Preview, found via
+// lsof — fast and with no Automation consent prompt. Returns the first match;
+// if several PDFs are open it may not be the frontmost, which is acceptable
+// for the common single-document case.
+func frontmostPreviewPDF(ctx context.Context, osa osadapter.Adapter) (string, error) {
+	// lsof -c Preview lists files held by the Preview process; -Fn prints
+	// name lines as "n/path". Keep .pdf paths, strip the leading "n".
+	out, err := osa.RunShell(ctx, `lsof -c Preview -Fn 2>/dev/null | grep -i '\.pdf$' | sed 's/^n//' | head -n1`)
+	if err != nil {
+		return "", fmt.Errorf("read_open_pdf: no pude inspeccionar Vista Previa: %w", err)
+	}
+	path := strings.TrimSpace(out)
+	if i := strings.IndexByte(path, '\n'); i >= 0 {
+		path = path[:i]
+	}
+	if path == "" {
+		return "", fmt.Errorf("read_open_pdf: no encontré un PDF abierto en Vista Previa. Pídele al usuario que lo abra, o usa la ruta con read_pdf")
+	}
+	return path, nil
+}
+
+// extractPDFText runs PDFKit (via JXA) over a path and returns the trimmed
+// text. Empty text means a scanned/image PDF.
+func extractPDFText(ctx context.Context, osa osadapter.Adapter, path string) (string, error) {
+	// osascript -l JavaScript -e '<program>' '<path>'  — path is argv[0] in
+	// run(). Both pieces are single-quoted so paths with spaces are safe.
+	cmd := "osascript -l JavaScript -e " + shellQuote(pdfTextJXA) + " " + shellQuote(path)
+	out, err := osa.RunShell(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(out))
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// extractPDFResult wraps extractPDFText with the scanned-PDF hint and the
+// output bound shared by both PDF tools.
+func extractPDFResult(ctx context.Context, osa osadapter.Adapter, path string, maxBytes int) (Result, error) {
+	out, err := extractPDFText(ctx, osa, path)
+	if err != nil {
+		return Result{}, fmt.Errorf("read_pdf: %w", err)
+	}
 	if out == "" {
-		// No extractable text: almost always a scanned/image PDF. Tell the
-		// brain plainly so it can offer the screenshot fallback.
 		return Result{Text: "(El PDF no tiene texto extraíble; probablemente está escaneado como imagen. Sugiere leerlo con una captura de pantalla.)"}, nil
 	}
-
-	max := t.MaxBytes
-	if max <= 0 {
-		max = 200 * 1024
+	if maxBytes <= 0 {
+		maxBytes = 200 * 1024
 	}
-	if len(out) > max {
-		out = out[:max] + "\n…(truncated)"
+	if len(out) > maxBytes {
+		out = out[:maxBytes] + "\n…(truncated)"
 	}
 	return Result{Text: out}, nil
 }

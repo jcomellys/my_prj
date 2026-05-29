@@ -44,10 +44,10 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"delega esto",
 		"PROHIBIDO usarlo para escribir archivos",
 		"write_file",
-		// Latency UX: preamble before slow tools + Preview timeout guard.
+		// Latency UX: preamble before slow tools + deterministic open-PDF read.
 		"Voy a leer esa sección",
-		"with timeout of 8 seconds",
-		"permiso de Automatización",
+		"read_open_pdf",
+		"NUNCA pidas la ruta scripteando Preview",
 		// Dictating text into apps/chats with confirmation before sending.
 		"type_text",
 		"¿Lo envío?",

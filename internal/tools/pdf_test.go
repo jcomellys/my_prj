@@ -102,6 +102,75 @@ func TestReadPDF_Truncates(t *testing.T) {
 	}
 }
 
+// scriptedOS answers RunShell based on the command, so we can simulate the
+// two-step read_open_pdf flow (lsof to find the path, then osascript/PDFKit).
+type scriptedOS struct {
+	lsofOut string
+	lsofErr error
+	pdfText string
+	gotLsof string
+	gotPDF  string
+}
+
+func (scriptedOS) Name() string                          { return "scripted" }
+func (scriptedOS) OpenApp(context.Context, string) error { return nil }
+func (s *scriptedOS) RunShell(_ context.Context, cmd string) (string, error) {
+	if strings.Contains(cmd, "lsof") {
+		s.gotLsof = cmd
+		return s.lsofOut, s.lsofErr
+	}
+	s.gotPDF = cmd
+	return s.pdfText, nil
+}
+func (s *scriptedOS) RunAppleScript(context.Context, string) (string, error) { return "", nil }
+
+func TestReadOpenPDF_FindsViaLsofAndExtracts(t *testing.T) {
+	osa := &scriptedOS{
+		lsofOut: "/Users/j/Desktop/paper.pdf\n",
+		pdfText: "Introduction\nThis paper explains transistors.",
+	}
+	out, err := NewReadOpenPDF(osa).Execute(context.Background(), `{}`)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(out.Text, "transistors") {
+		t.Errorf("expected extracted text, got %q", out.Text)
+	}
+	// Must locate the PDF with lsof, NOT by scripting Preview (the 87s path).
+	if !strings.Contains(osa.gotLsof, "lsof") {
+		t.Errorf("expected lsof lookup, got %q", osa.gotLsof)
+	}
+	// The found path must be passed (quoted) to the PDFKit extractor.
+	if !strings.Contains(osa.gotPDF, "/Users/j/Desktop/paper.pdf") {
+		t.Errorf("expected the lsof path forwarded to PDFKit, got %q", osa.gotPDF)
+	}
+	if strings.Contains(osa.gotLsof, "Preview\" to get path") || strings.Contains(osa.gotPDF, "to get path of front document") {
+		t.Error("must never script Preview for the path")
+	}
+}
+
+func TestReadOpenPDF_NoOpenPDF(t *testing.T) {
+	osa := &scriptedOS{lsofOut: "  \n"} // lsof found nothing
+	_, err := NewReadOpenPDF(osa).Execute(context.Background(), `{}`)
+	if err == nil {
+		t.Fatal("expected an error when no PDF is open")
+	}
+	if !strings.Contains(err.Error(), "no encontré un PDF abierto") {
+		t.Errorf("expected a clear 'no open PDF' message, got %v", err)
+	}
+}
+
+func TestReadOpenPDF_ScannedPDF(t *testing.T) {
+	osa := &scriptedOS{lsofOut: "/tmp/scan.pdf", pdfText: "   "} // PDFKit returns no text
+	out, err := NewReadOpenPDF(osa).Execute(context.Background(), `{}`)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(out.Text), "escaneado") {
+		t.Errorf("expected scanned-PDF hint, got %q", out.Text)
+	}
+}
+
 func TestShellQuote_EscapesQuotes(t *testing.T) {
 	got := shellQuote("/Users/me/it's a.pdf")
 	want := `'/Users/me/it'\''s a.pdf'`
