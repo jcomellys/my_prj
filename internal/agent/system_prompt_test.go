@@ -44,6 +44,10 @@ func TestDefaultSystemPrompt_MentionsKeyTools(t *testing.T) {
 		"delega esto",
 		"PROHIBIDO usarlo para escribir archivos",
 		"write_file",
+		// Dictating text into apps/chats with confirmation before sending.
+		"type_text",
+		"¿Lo envío?",
+		"submit=true",
 		// Reading new chat messages aloud.
 		"Leer mensajes nuevos de un chat",
 		"último mensaje",
