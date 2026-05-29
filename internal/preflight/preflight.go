@@ -140,7 +140,11 @@ func Run(ctx context.Context, cfg *agent.Config, osa osadapter.Adapter) []Check 
 	if raw, err := osa.RunAppleScript(ctx, "input volume of (get volume settings)"); err != nil {
 		checks = append(checks, Check{"micrófono", Warn, "no pude leer el volumen de entrada: " + err.Error()})
 	} else if vol, perr := parseInputVolume(raw); perr != nil {
-		checks = append(checks, Check{"micrófono", Warn, "volumen de entrada ilegible: " + strings.TrimSpace(raw)})
+		// Many input devices (external/USB mics) don't report their level to
+		// macOS — `get volume settings` returns "missing value". The check
+		// can't help here, so make it actionable: tell the user to verify by
+		// eye, since a too-low mic is exactly what derails a session.
+		checks = append(checks, Check{"micrófono", Warn, "no pude leer el nivel automáticamente (tu micrófono no lo reporta). Verifícalo a mano: Ajustes → Sonido → Entrada, súbelo a ~70-85 y confirma que la barra se mueva al hablar"})
 	} else {
 		st, detail := MicConcern(vol)
 		checks = append(checks, Check{"micrófono", st, detail})
