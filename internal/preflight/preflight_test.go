@@ -14,7 +14,7 @@ func TestMicConcern(t *testing.T) {
 		want Status
 	}{
 		{-1, Warn},
-		{7, Fail},   // the real value that derailed a live session
+		{7, Fail}, // the real value that derailed a live session
 		{19, Fail},
 		{30, Warn},
 		{45, OK},
@@ -83,8 +83,8 @@ type fakeOS struct {
 	asErr  error
 }
 
-func (fakeOS) Name() string                                  { return "fake" }
-func (fakeOS) OpenApp(context.Context, string) error         { return nil }
+func (fakeOS) Name() string                          { return "fake" }
+func (fakeOS) OpenApp(context.Context, string) error { return nil }
 func (f fakeOS) RunShell(context.Context, string) (string, error) {
 	return f.voices, nil
 }

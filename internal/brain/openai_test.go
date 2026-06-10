@@ -173,8 +173,8 @@ func TestOpenAI_ReasoningEffort(t *testing.T) {
 		{"gpt-5", "low", true, "low"},
 		{"gpt-5-mini", "minimal", true, "minimal"},
 		{"o3-mini", "high", true, "high"},
-		{"gpt-5", "", false, ""},      // empty => omit (API default)
-		{"gpt-4o", "low", false, ""},  // non-reasoning model => never sent
+		{"gpt-5", "", false, ""},     // empty => omit (API default)
+		{"gpt-4o", "low", false, ""}, // non-reasoning model => never sent
 	}
 	for _, c := range cases {
 		present, got = false, ""

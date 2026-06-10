@@ -427,7 +427,7 @@ func (p *pricedBrain) Chat(_ context.Context, _ []brain.Message, _ []brain.ToolS
 // so we can assert the orchestrator narrates a preamble before slow tools.
 type speakingVoice struct{ spoken []string }
 
-func (*speakingVoice) Name() string                            { return "speaking" }
+func (*speakingVoice) Name() string                               { return "speaking" }
 func (*speakingVoice) Start(context.Context, voice.Handler) error { return nil }
 func (v *speakingVoice) Speak(_ context.Context, text string) error {
 	v.spoken = append(v.spoken, text)
