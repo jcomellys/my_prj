@@ -256,6 +256,35 @@ open document and hears it, translated to Spanish if the source is English.
       confirm extraction works on a real English PDF and the section is read
       back in Spanish.
 
+## Token-efficiency — history compaction  — code done (bench), no live data yet
+
+Every turn re-sends the whole history; a single full-PDF tool result
+(200 KiB) was getting re-billed on every later turn of the session. Now,
+before each new user turn, the orchestrator compacts deterministically (no
+extra LLM call, $0):
+
+- [x] Tool results older than the last 4 user turns are cut to a 300-byte
+      head + elision marker; old images dropped.
+- [x] If still over the ~24 KiB soft limit, whole oldest turns are dropped at
+      user-message boundaries (never orphans a tool_call/result pair). System
+      prompt and the recent window always survive.
+- [x] Log line `history.compact before_bytes=… after_bytes=…` for live audit.
+- [x] Tests: under-limit untouched, old-result shrink keeps the pair intact,
+      oldest-turn drop preserves system + recent window, recent window never
+      shrunk, UTF-8-safe truncation. Green -race.
+- [ ] Live observation: in a long session, grep `history.compact` and confirm
+      in_tokens stops growing turn-over-turn.
+
+## Fast-path robustness (bench, queued for C-019 live run)
+
+- [x] "léeme la sección **de** introducción", "…**por favor**", "…**en su
+      idioma original / en inglés / del pdf**" now clean to the bare heading
+      before hitting the tool (the raw capture used to fail the heading
+      match). "léame" (usted) accepted.
+- [x] Synthetic fast-path tool-call ids unique per session (Anthropic rejects
+      duplicate tool_use ids).
+- [x] UTF-8-safe truncation in logs and PDF section windows (no split runes).
+
 ## Fase 0.4.2B — Streaming TTS (deferred)
 
 - [ ] Stream the reply to TTS sentence-by-sentence so the user hears the

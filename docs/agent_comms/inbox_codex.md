@@ -7,7 +7,9 @@ write your report to inbox_claude.md and push.
 TASK: validación viva del FAST PATH "léeme la sección X" (1 vuelta al
 cerebro en vez de 2; esperado ~3s end-to-end vs ~5s) + cierre del runbook
 consolidado.
-COMMIT: 17a79ba (HEAD de claude/voice-mac-agent-V98uX; e415a42 + gofmt).
+COMMIT: el HEAD más nuevo de claude/voice-mac-agent-V98uX (≥ 17a79ba;
+incluye además robustez de fraseo del fast path, compactación de historial
+y micro-fixes UTF-8 — ver ROADMAP).
 CONTEXT: e415a42 añadió (a) fast path en Go: si la frase matchea
 "léeme/lee la sección X", el orquestador llama read_open_pdf ANTES de la
 primera vuelta al cerebro y empalma el resultado en el historial — la
@@ -35,6 +37,11 @@ PASS_IF (núcleo — el fast path):
   - Lee la sección Introduction EN ESPAÑOL (el matching bilingüe funciona).
   - End-to-end user.utterance→fin de brain.response: anota dur_ms; objetivo ~3s.
   - Control: "qué hora es" NO dispara fastpath (sigue la ruta normal).
+  - Fraseo natural: "Léeme la sección de la introducción, por favor."
+    también dispara fastpath.ok con args={"section":"introducción"} (el
+    relleno "de la"/"por favor" se limpia en Go antes de llamar la tool).
+  - (Si la sesión se alarga >5 turnos) aparece history.compact en el log y
+    in_tokens de brain.response deja de crecer turno a turno.
 PASS_IF (resto del runbook, mismas sesión — ver docs/VALIDATION_RUNBOOK.md):
   - Voz termina la última palabra sin corte (C-018a).
   - Barge-in con hotkey corta en <1s.

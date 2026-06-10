@@ -51,6 +51,9 @@ type Orchestrator struct {
 	// name so an unpriced model doesn't spam the log every turn.
 	warnedPricing map[string]bool
 
+	// fastpathSeq makes synthetic tool-call ids unique within a session.
+	fastpathSeq int
+
 	// running conversation state — kept short by SummarizeIfLarge later
 	history []brain.Message
 }
@@ -148,6 +151,10 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 	if reply, stop := o.budgetHardStop(); stop {
 		return reply, nil
 	}
+
+	// Bound the prompt before this turn grows it further — old tool payloads
+	// otherwise get re-billed every turn for the rest of the session.
+	o.compactHistory()
 
 	o.history = append(o.history, brain.Message{Role: brain.RoleUser, Content: userText})
 
@@ -339,7 +346,7 @@ func (o *Orchestrator) runTool(ctx context.Context, tc brain.ToolCall) (tools.Re
 // visible for audit. Newlines collapsed to one-line for grep-friendliness.
 func truncateForLog(s string, max int) string {
 	if len(s) > max {
-		s = s[:max] + "…"
+		s = truncateUTF8(s, max) + "…"
 	}
 	// Collapse newlines so log lines stay scannable.
 	out := make([]byte, 0, len(s))

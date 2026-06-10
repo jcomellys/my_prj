@@ -11,6 +11,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -20,11 +21,36 @@ import (
 )
 
 // sectionRequestRe matches the "léeme/lee la sección X" family. It tolerates
-// the accent on "léeme" (STT can swallow it) and on "sección", and ignores a
-// trailing punctuation mark. Captures the section name.
+// the accent on "léeme" (STT can swallow it), the formal "léame", and the
+// accent on "sección", and ignores a trailing punctuation mark. Captures the
+// section name.
 var sectionRequestRe = regexp.MustCompile(
-	`(?i)\b(?:l[eé][eé]me|lee)\s+la\s+secci[oó]n\s+([^\.\!\?]+?)\s*[\.\!\?]?\s*$`,
+	`(?i)\b(?:l[eé][eé]me|l[eé]ame|lee)\s+la\s+secci[oó]n\s+([^\.\!\?]+?)\s*[\.\!\?]?\s*$`,
 )
+
+// Natural speech wraps the section name in filler the PDF heading does not
+// have: "la sección DE introducción", "…POR FAVOR", "…EN INGLÉS". Strip the
+// known wrappers so the tool receives the bare heading. Trailing modifiers
+// can stack ("…del pdf por favor"), so they are stripped in a loop.
+var sectionLeadInRe = regexp.MustCompile(`(?i)^(?:de\s+la\s+|de\s+los\s+|de\s+las\s+|del\s+|de\s+)`)
+var sectionTrailerRe = regexp.MustCompile(
+	`(?i)(?:^|\s+)(?:por\s+favor|en\s+su\s+idioma\s+original|en\s+ingl[eé]s|en\s+espa[ñn]ol|del\s+(?:pdf|documento|archivo|libro)|de\s+la\s+p[aá]gina|del\s+texto)\s*$`,
+)
+
+// cleanSectionName strips the speech wrappers around a captured section name.
+// Returns "" when nothing remains (the utterance was all filler).
+func cleanSectionName(s string) string {
+	s = strings.TrimSpace(s)
+	for {
+		t := sectionTrailerRe.ReplaceAllString(s, "")
+		if t == s {
+			break
+		}
+		s = t
+	}
+	s = sectionLeadInRe.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
+}
 
 // tryFastPath inspects userText for a known intent. On a match it runs the
 // matching tool in Go and appends a synthetic (assistant tool_call + tool
@@ -36,7 +62,7 @@ var sectionRequestRe = regexp.MustCompile(
 // belong here.
 func (o *Orchestrator) tryFastPath(ctx context.Context, userText string) bool {
 	if m := sectionRequestRe.FindStringSubmatch(userText); m != nil {
-		section := strings.TrimSpace(m[1])
+		section := cleanSectionName(m[1])
 		if section == "" {
 			return false
 		}
@@ -51,7 +77,11 @@ func (o *Orchestrator) runFastPath(ctx context.Context, name string, args map[st
 		return false
 	}
 	argsJSON, _ := json.Marshal(args)
-	id := "fastpath-" + name
+	// Unique per call: some APIs (Anthropic) reject a history where two
+	// tool_use blocks share an id, and a session can hit the same fast path
+	// many times.
+	o.fastpathSeq++
+	id := fmt.Sprintf("fastpath-%s-%d", name, o.fastpathSeq)
 
 	start := time.Now()
 	res, err := t.Execute(ctx, string(argsJSON))

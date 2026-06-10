@@ -218,6 +218,11 @@ func narrowToSection(text, section string) (string, bool) {
 			end := idx + sectionWindowBytes
 			if end > len(text) {
 				end = len(text)
+			} else {
+				// Don't split a multibyte rune at the window edge.
+				for end > idx && !utf8.RuneStart(text[end]) {
+					end--
+				}
 			}
 			out := text[idx:end]
 			if end < len(text) {

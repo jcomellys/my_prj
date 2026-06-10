@@ -10,6 +10,9 @@ import (
 )
 
 func TestSectionRequestRe_Matches(t *testing.T) {
+	// want is the CLEANED section name — what the tool will receive. Natural
+	// speech filler ("de", "por favor", "en inglés"…) must not reach the
+	// heading matcher, or "la sección de resultados" never finds "Results".
 	cases := []struct {
 		in   string
 		want string
@@ -17,9 +20,13 @@ func TestSectionRequestRe_Matches(t *testing.T) {
 		{"léeme la sección introducción", "introducción"},
 		{"Léeme la sección Introducción.", "Introducción"},
 		{"leeme la seccion introducción", "introducción"}, // STT drops accents
-		{"Lee la sección de resultados", "de resultados"},
+		{"Lee la sección de resultados", "resultados"},
+		{"Léame la sección conclusiones", "conclusiones"}, // formal usted
 		{"léeme la sección 3", "3"},
-		{"léeme la sección introducción por favor", "introducción por favor"},
+		{"léeme la sección introducción por favor", "introducción"},
+		{"léeme la sección de la introducción del pdf por favor", "introducción"},
+		{"léeme la sección resumen en su idioma original", "resumen"},
+		{"léeme la sección métodos en inglés", "métodos"},
 	}
 	for _, c := range cases {
 		m := sectionRequestRe.FindStringSubmatch(c.in)
@@ -27,10 +34,18 @@ func TestSectionRequestRe_Matches(t *testing.T) {
 			t.Errorf("expected match on %q", c.in)
 			continue
 		}
-		got := strings.TrimSpace(m[1])
+		got := cleanSectionName(m[1])
 		if got != c.want {
 			t.Errorf("for %q: got section %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// TestCleanSectionName_AllFiller: an utterance whose "section" is pure filler
+// must clean to empty so the fast path declines instead of querying "".
+func TestCleanSectionName_AllFiller(t *testing.T) {
+	if got := cleanSectionName("del pdf por favor"); got != "" {
+		t.Errorf("expected empty after cleaning pure filler, got %q", got)
 	}
 }
 
@@ -81,6 +96,31 @@ func TestFastPath_OneBrainRoundInsteadOfTwo(t *testing.T) {
 	}
 	if !strings.Contains(reply, "transistores") {
 		t.Errorf("expected the brain's response based on the tool result, got %q", reply)
+	}
+}
+
+// TestFastPath_UniqueToolCallIDs: hitting the fast path twice in one session
+// must produce distinct synthetic tool-call ids — Anthropic rejects a history
+// where two tool_use blocks share an id.
+func TestFastPath_UniqueToolCallIDs(t *testing.T) {
+	reg := tools.NewRegistry()
+	reg.Register(&programmableTool{name: "read_open_pdf", result: "texto"})
+	b := &scriptedBrain{queue: []brain.Response{{Text: "uno"}, {Text: "dos"}}}
+	orch := New(nil, b, reg, "system", quietLogger())
+
+	for _, u := range []string{"léeme la sección introducción", "léeme la sección resumen"} {
+		if _, err := orch.HandleUtterance(context.Background(), u); err != nil {
+			t.Fatalf("HandleUtterance(%q): %v", u, err)
+		}
+	}
+	seen := map[string]bool{}
+	for _, m := range orch.history {
+		for _, tc := range m.ToolCalls {
+			if seen[tc.ID] {
+				t.Errorf("duplicate tool-call id %q in history", tc.ID)
+			}
+			seen[tc.ID] = true
+		}
 	}
 }
 
