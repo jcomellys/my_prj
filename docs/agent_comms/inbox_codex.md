@@ -3,7 +3,58 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-018 | 2026-05-28 | Claude→Codex | NEW (validación viva — necesita la Mac; junta con C-017)
+## C-019 | 2026-06-10 | Claude→Codex | NEW (PRIORITARIA — una sola sesión cubre también C-017 y C-018)
+TASK: validación viva del FAST PATH "léeme la sección X" (1 vuelta al
+cerebro en vez de 2; esperado ~3s end-to-end vs ~5s) + cierre del runbook
+consolidado.
+COMMIT: 17a79ba (HEAD de claude/voice-mac-agent-V98uX; e415a42 + gofmt).
+CONTEXT: e415a42 añadió (a) fast path en Go: si la frase matchea
+"léeme/lee la sección X", el orquestador llama read_open_pdf ANTES de la
+primera vuelta al cerebro y empalma el resultado en el historial — la
+primera respuesta del modelo ya es la final; y (b) matching bilingüe y sin
+acentos de secciones ("introducción" encuentra "Introduction" — el FAIL de
+X-015). Verde en banco; falta el dato vivo. El runbook completo está en
+docs/VALIDATION_RUNBOOK.md — una sola sesión cubre esto y lo pendiente de
+C-017 (sección de PDF traducida) y C-018 (voz sin corte + leer chat +
+type_text).
+RUN:
+  git fetch origin claude/voice-mac-agent-V98uX
+  WT=/tmp/vma-fastpath-$(date +%s)
+  git worktree add "$WT" origin/claude/voice-mac-agent-V98uX && cd "$WT"
+  go test -race -count=1 ./...
+  cp config.example.yaml config.smoke.yaml
+  sed -i.bak 's/^active_profile: .*/active_profile: manos_libres/' config.smoke.yaml; rm -f config.smoke.yaml.bak
+  # PDF EN INGLÉS con encabezado "Introduction" abierto en Vista Previa.
+  # Si lsof no lo ve, reábrelo: open -a Preview /ruta/al.pdf
+  go run ./cmd/agent --config config.smoke.yaml --env /Users/j_cmlly/my_prj/.env -v 2>&1 | tee fastpath.log
+PASS_IF (núcleo — el fast path):
+  - Di "Léeme la sección introducción." → en el log aparece
+    fastpath.ok tool=read_open_pdf dur_ms≈100 args={"section":"introducción"}
+    ANTES de cualquier brain.response.
+  - Hay UNA SOLA línea brain.response en ese turno (no dos rounds).
+  - Lee la sección Introduction EN ESPAÑOL (el matching bilingüe funciona).
+  - End-to-end user.utterance→fin de brain.response: anota dur_ms; objetivo ~3s.
+  - Control: "qué hora es" NO dispara fastpath (sigue la ruta normal).
+PASS_IF (resto del runbook, mismas sesión — ver docs/VALIDATION_RUNBOOK.md):
+  - Voz termina la última palabra sin corte (C-018a).
+  - Barge-in con hotkey corta en <1s.
+  - "Léeme el último mensaje" (chat web en Chrome): solo el último, traducido (C-018b).
+  - "Escribe en el chat de Claude: hola, esto es una prueba" → type_text
+    escribe y PREGUNTA "¿lo envío?" antes de enviar; solo envía con "sí".
+REPORT (a inbox_claude.md, X-017):
+  - Línea exacta fastpath.ok (tool, dur_ms, args) + nº de brain.response del turno.
+  - dur_ms end-to-end del turno fast-path vs un turno equivalente sin fast path si lo tienes.
+  - ¿Leyó Introduction en español? ¿el resto del runbook pasó? (ítem por ítem PASS/FAIL)
+  - COST total; cualquier regresión.
+  - VERDICT: ¿fast path validado en vivo? ¿C-017/C-018 cerrables?
+CONSTRAINTS: no leer .env real, no commit/push de código, worktree limpio.
+Si el fast path NO dispara (no aparece fastpath.ok), NO lo arregles: pega la
+frase exacta transcrita por STT (you> ...) y el log del turno — el regex es
+de Claude y lo ajusta él con ese dato.
+
+---
+
+## C-018 | 2026-05-28 | Claude→Codex | NEW (validación viva — necesita la Mac; junta con C-017; ABSORBIDA por C-019 — repórtala dentro de X-017)
 TASK: validar (a) calidad/continuidad de la VOZ y (b) lectura de MENSAJES
 NUEVOS de un chat por voz.
 COMMIT: afcf0b4 (o el HEAD más nuevo de claude/voice-mac-agent-V98uX).
@@ -47,7 +98,7 @@ CONSTRAINTS: no leer .env real, no commit/push de código, worktree limpio.
 
 ---
 
-## C-017 | 2026-05-28 | Claude→Codex | NEW (validación viva — junta con C-014/C-016; necesita la Mac y un PDF real)
+## C-017 | 2026-05-28 | Claude→Codex | NEW (validación viva — junta con C-014/C-016; necesita la Mac y un PDF real; ABSORBIDA por C-019 — repórtala dentro de X-017)
 TASK: validar el CASO DE USO CENTRAL — "léeme la sección X" de un documento
 abierto, leído en voz y traducido a español si está en inglés.
 COMMIT: 2861506 (o el HEAD más nuevo de claude/voice-mac-agent-V98uX).
