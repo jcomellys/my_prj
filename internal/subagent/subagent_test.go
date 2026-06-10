@@ -166,3 +166,65 @@ func TestRunner_ContextCancelDuringBrainDoesNotHang(t *testing.T) {
 		t.Fatalf("Run returned too slowly after cancellation: %s", elapsed)
 	}
 }
+
+func TestRunner_EmitsProgressEventsInOrder(t *testing.T) {
+	reg := tools.NewRegistry()
+	reg.Register(&probeTool{name: "do_thing", result: "done"})
+
+	b := &scriptedBrain{name: "openai:gpt-5", queue: []brain.Response{
+		{ToolCalls: []brain.ToolCall{{ID: "1", Name: "do_thing", Arguments: "{}"}}},
+		{Text: "Resumen final."},
+	}}
+	r := New(b, reg, "sys", quiet())
+
+	ch := make(chan ProgressEvent, 32)
+	if _, err := r.RunWithProgress(context.Background(), "haz la cosa", ch); err != nil {
+		t.Fatalf("RunWithProgress: %v", err)
+	}
+	close(ch)
+	var kinds []ProgressKind
+	var toolName string
+	for ev := range ch {
+		kinds = append(kinds, ev.Kind)
+		if ev.Kind == ProgressToolOK {
+			toolName = ev.Tool
+		}
+	}
+	want := []ProgressKind{ProgressStarted, ProgressRound, ProgressToolOK, ProgressRound, ProgressDone}
+	if len(kinds) != len(want) {
+		t.Fatalf("got %d events %v, want %v", len(kinds), kinds, want)
+	}
+	for i := range want {
+		if kinds[i] != want[i] {
+			t.Errorf("event %d = %s, want %s", i, kinds[i], want[i])
+		}
+	}
+	if toolName != "do_thing" {
+		t.Errorf("tool_ok carried tool %q, want do_thing", toolName)
+	}
+}
+
+func TestRunner_FullProgressChannelNeverBlocksTask(t *testing.T) {
+	reg := tools.NewRegistry()
+	reg.Register(&probeTool{name: "do_thing", result: "done"})
+
+	b := &scriptedBrain{name: "openai:gpt-5", queue: []brain.Response{
+		{ToolCalls: []brain.ToolCall{{ID: "1", Name: "do_thing", Arguments: "{}"}}},
+		{Text: "Resumen."},
+	}}
+	r := New(b, reg, "sys", quiet())
+
+	ch := make(chan ProgressEvent) // unbuffered, NO consumer: every send must drop
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := r.RunWithProgress(context.Background(), "haz la cosa", ch); err != nil {
+			t.Errorf("RunWithProgress: %v", err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("runner blocked on a progress send — emit must be non-blocking")
+	}
+}

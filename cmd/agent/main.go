@@ -174,8 +174,15 @@ func main() {
 		runner := subagent.New(subBrain, subReg, agent.SubAgentSystemPrompt, log)
 		runner.Cost = tracker
 		runner.SessionID = "subagent"
-		registry.Register(tools.NewDelegateTask(runner))
-		log.Info("subagent.ready", "brain", subBrain.Name(), "tools", len(subReg.Specs()))
+		// Mid-task voice narration (fase 1 incr 2): fixed phrases, rate-
+		// limited, zero extra tokens. Silent pass-through if the voice
+		// provider can't Speak.
+		delegate := &agent.NarratedDelegate{Runner: runner, Log: log}
+		if s, ok := v.(agent.Speaker); ok {
+			delegate.Voice = s
+		}
+		registry.Register(tools.NewDelegateTask(delegate))
+		log.Info("subagent.ready", "brain", subBrain.Name(), "tools", len(subReg.Specs()), "narration", delegate.Voice != nil)
 	}
 
 	// --- Run ----------------------------------------------------------------

@@ -20,6 +20,27 @@ import (
 	"github.com/jcomellys/voice-mac-agent/internal/tools"
 )
 
+// ProgressKind classifies a ProgressEvent.
+type ProgressKind string
+
+const (
+	ProgressStarted ProgressKind = "started"
+	ProgressRound   ProgressKind = "round"
+	ProgressToolOK  ProgressKind = "tool_ok"
+	ProgressToolErr ProgressKind = "tool_error"
+	ProgressDone    ProgressKind = "done"
+)
+
+// ProgressEvent is a structured, token-free signal of what the sub-agent is
+// doing mid-task. The frontal narrates a subset with fixed phrases so the
+// user isn't left in silence during a long delegation (fase 1 incremento 2;
+// design: docs/design/fase1-incr2-mid-task-narration.md).
+type ProgressEvent struct {
+	Kind  ProgressKind
+	Round int
+	Tool  string
+}
+
 // Runner executes one delegated task to completion.
 type Runner struct {
 	Brain     brain.Brain     // typically the deep brain (gpt-5)
@@ -47,6 +68,13 @@ func New(b brain.Brain, reg *tools.Registry, system string, log *slog.Logger) *R
 // Run executes the task autonomously and returns the final text result.
 // Honors ctx cancellation (barge-in / Ctrl-C) at every round.
 func (r *Runner) Run(ctx context.Context, task string) (string, error) {
+	return r.RunWithProgress(ctx, task, nil)
+}
+
+// RunWithProgress is Run with an optional progress channel. Sends are
+// non-blocking: a slow or absent consumer never stalls the task. The caller
+// owns the channel's lifetime (the runner never closes it).
+func (r *Runner) RunWithProgress(ctx context.Context, task string, progress chan<- ProgressEvent) (string, error) {
 	maxRounds := r.MaxRounds
 	if maxRounds <= 0 {
 		maxRounds = 24
@@ -63,11 +91,13 @@ func (r *Runner) Run(ctx context.Context, task string) (string, error) {
 	specs := r.Tools.Specs()
 
 	log.Info("subagent.start", "brain", r.Brain.Name(), "task", truncate(task, 200))
+	emit(ctx, progress, ProgressEvent{Kind: ProgressStarted})
 
 	for round := 0; round < maxRounds; round++ {
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
+		emit(ctx, progress, ProgressEvent{Kind: ProgressRound, Round: round})
 
 		resp, err := r.Brain.Chat(ctx, history, specs)
 		if err != nil {
@@ -96,6 +126,7 @@ func (r *Runner) Run(ctx context.Context, task string) (string, error) {
 
 		if len(resp.ToolCalls) == 0 {
 			log.Info("subagent.done", "rounds", round+1)
+			emit(ctx, progress, ProgressEvent{Kind: ProgressDone, Round: round})
 			return resp.Text, nil
 		}
 
@@ -104,8 +135,10 @@ func (r *Runner) Run(ctx context.Context, task string) (string, error) {
 			if terr != nil {
 				res = tools.Result{Text: "ERROR: " + terr.Error()}
 				log.Warn("subagent.tool.error", "tool", tc.Name, "err", terr)
+				emit(ctx, progress, ProgressEvent{Kind: ProgressToolErr, Round: round, Tool: tc.Name})
 			} else {
 				log.Info("subagent.tool.ok", "tool", tc.Name)
+				emit(ctx, progress, ProgressEvent{Kind: ProgressToolOK, Round: round, Tool: tc.Name})
 			}
 			history = append(history, brain.Message{
 				Role:       brain.RoleTool,
@@ -118,6 +151,20 @@ func (r *Runner) Run(ctx context.Context, task string) (string, error) {
 	}
 
 	return "", fmt.Errorf("subagent: se alcanzo MaxRounds=%d sin completar la tarea", maxRounds)
+}
+
+// emit sends a progress event without ever blocking the task: if the consumer
+// is slow (buffer full) or the ctx died, the event is dropped. Narration is
+// best-effort by design — losing a phrase is fine, stalling the task is not.
+func emit(ctx context.Context, ch chan<- ProgressEvent, ev ProgressEvent) {
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- ev:
+	case <-ctx.Done():
+	default:
+	}
 }
 
 func (r *Runner) runTool(ctx context.Context, tc brain.ToolCall) (tools.Result, error) {

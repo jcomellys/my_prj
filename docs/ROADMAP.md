@@ -337,13 +337,35 @@ times and reports back a summary the frontal reads aloud. User chose
       the default 200 KiB read_file truncation. All green -race.
 
 Known limits of increment 1 (honest):
-- No mid-task voice narration: delegate_task blocks while the sub-agent
-  works; the frontal speaks only the final summary. (Barge-in DOES cancel
-  a long task, since the sub-agent honors ctx.) Real-time progress needs
-  concurrency/streaming — a later increment.
+- ~~No mid-task voice narration~~ → shipped in increment 2 (below).
 - No budget check mid-task: MaxRounds bounds cost; a per-round budget guard
   is a follow-up.
 - No recursion: the sub-agent does not get its own delegate_task.
+
+### Increment 2 — mid-task narration  — code done (bench), live validation pending
+
+Implements the chosen option from docs/design/fase1-incr2-mid-task-narration.md
+(Go progress channel + deterministic phrases; zero extra tokens):
+
+- [x] `subagent.Runner.RunWithProgress` emits structured events (started /
+      round / tool_ok / tool_error / done) on a channel; sends are
+      non-blocking so a slow consumer can never stall the task.
+- [x] `agent.NarratedDelegate` wraps the runner for delegate_task: a
+      goroutine narrates fixed Spanish phrases ("Sigo trabajando; ya escribí
+      un archivo."), rate-limited to one per ~9s, with a heartbeat fallback
+      after ~18s of silence (long brain rounds emit no events — exactly the
+      dead air this kills). started/done stay silent: the frontal already
+      speaks its own preamble and final summary.
+- [x] Barge-in preserved: narration speaks with the turn's ctx; the hotkey
+      cancels task and phrase together; the consumer goroutine always exits
+      (no leaks — Run joins it before returning).
+- [x] Tests: long task narrates ≥1 phrase, short task stays quiet, bursts
+      coalesce, heartbeat fires during a silent stretch, cancel returns
+      promptly, nil-voice passes through, runner event order, full channel
+      never blocks. Green -race (also with -count=5).
+- [ ] Live validation: delegate a long file-writing task, confirm at least
+      one "Sigo trabajando…" mid-task and that the hotkey still cuts
+      everything <1s.
 
 ## Fase 2 — Realtime voice as premium option (renumbered; deferred)
 
