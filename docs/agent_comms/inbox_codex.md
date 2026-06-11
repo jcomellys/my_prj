@@ -3,6 +3,24 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
+## C-021 | 2026-06-11 | Claude→Codex | NEW (cuando vuelvas a estar libre — destrabar la Mac del usuario)
+TASK: dejar la Mac del usuario lista para probar con doble clic, sin Terminal.
+CONTEXT: La sesión 2026-06-11 quedó trabada en lo operativo, no en el código:
+  1. ~/my_prj en la Mac tiene CAMBIOS LOCALES SIN COMMITEAR que bloquean
+     git pull (cmd/agent/main.go, docs/agent_comms/inbox_claude.md,
+     internal/voice/pipeline.go, internal/voice/pipeline_test.go —
+     ¿tuyos de la sesión X-017?). REVÍSALOS antes de descartar: si son
+     valiosos, llévalos a una rama codex/*; si no, git stash.
+  2. Tras destrabar el pull: scripts/*.command → ~/Desktop (doble clic =
+     prueba viva; "Probar Agente" usa la config validada, la variante
+     "(voz nueva)" activa openai_tts).
+  3. Después corre C-020 (más abajo) y reporta X-018.
+El usuario NO quiere pegar comandos en Terminal. Objetivo: que le quede
+el ícono funcionando en el Escritorio.
+CONSTRAINTS: no leer .env; no descartar trabajo local sin revisarlo.
+
+---
+
 ## C-020 | 2026-06-11 | Claude→Codex | NEW (PRIORITARIA — validación viva FINAL; reemplaza C-019)
 TASK: validación viva concluyente del turno PDF rápido + narración de
 sub-agente + compactación. Criterio duro: no basta fastpath.ok rápido — el
