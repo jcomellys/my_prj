@@ -51,12 +51,31 @@ var DefaultPrices = map[string]Pricing{
 	"mock": {InputPer1M: 0, OutputPer1M: 0, CachedInputPer1M: 0},
 }
 
+// overrides holds user-supplied pricing from config. Written once at startup
+// (before any brain call), read afterwards; checked before DefaultPrices so
+// the user wins when prices change.
+var overrides = map[string]Pricing{}
+
+// Override registers (or replaces) the pricing for a brain name. Call at
+// startup only — Lookup reads the map without locking once the agent runs.
+func Override(brainName string, p Pricing) {
+	overrides[strings.ToLower(strings.TrimSpace(brainName))] = p
+}
+
 // Lookup resolves a brain.Name() like "openai:gpt-5" to a Pricing entry.
-// Exact match wins; otherwise a prefix match (so a provider with multiple
-// model versions can share a row). Returns zero Pricing and false if no
-// rule matches — caller should log a warning.
+// User overrides win, then exact default match, then a prefix match (so a
+// provider with multiple model versions can share a row). Returns zero
+// Pricing and false if no rule matches — caller should log a warning.
 func Lookup(brainName string) (Pricing, bool) {
 	name := strings.ToLower(brainName)
+	if p, ok := overrides[name]; ok {
+		return p, true
+	}
+	for prefix, p := range overrides {
+		if strings.HasSuffix(prefix, ":") && strings.HasPrefix(name, prefix) {
+			return p, true
+		}
+	}
 	if p, ok := DefaultPrices[name]; ok {
 		return p, true
 	}

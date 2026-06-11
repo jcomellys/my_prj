@@ -132,7 +132,9 @@ user's explicit choice.
       refuses with a spoken message and never calls the brain. Crossing
       `warn_at_pct` appends a one-time spoken heads-up. 0 budget = no limit.
       Built + unit-tested in the sandbox.
-- [ ] User-overrideable pricing via config (for when prices change).
+- [x] User-overrideable pricing via config: `cost.pricing` maps brain name
+      (or "provider:" prefix) → per-1M rates and wins over the built-in
+      table. Logged as cost.pricing.override at startup.
 
 **Exit criterion:** User can run a 30-minute session and see real cost
 in the cost log. Cost on `cheap` profile is well below $1/hour.
@@ -355,8 +357,14 @@ times and reports back a summary the frontal reads aloud. User chose
 
 Known limits of increment 1 (honest):
 - ~~No mid-task voice narration~~ → shipped in increment 2 (below).
-- No budget check mid-task: MaxRounds bounds cost; a per-round budget guard
-  is a follow-up.
+- ~~No budget check mid-task~~ → Runner.BudgetCheck now runs before every
+  round; when the monthly budget is hit mid-task the task stops with a
+  spoken "tarea detenida por presupuesto" (fails open if the cost log is
+  unreadable — MaxRounds still bounds it).
+- The sub-agent's own task history is also compacted now (old tool payloads
+  shrunk past 32 KiB, recent tail and the plan trail untouched) — a 24-round
+  task on gpt-5 no longer re-bills early PDFs every round
+  (`subagent.history.compact` in the log).
 - No recursion: the sub-agent does not get its own delegate_task.
 
 ### Increment 2 — mid-task narration  — code done (bench), live validation pending

@@ -116,7 +116,9 @@ profiles:
             abre, busca, léeme, lee, cierra, navega, escribe, describe.
             Aplicaciones y sitios: Google Chrome, Mensajes, Wikipedia,
             YouTube, Word. Objetos: pestaña, página, pantalla, párrafo,
-            hora, gasto.
+            hora, gasto. Documentos: sección, introducción, resumen,
+            conclusiones, resultados, métodos, referencias, documento.
+            Frase típica: léeme la sección de la introducción, por favor.
       tts:
         provider: macos_say
       cues:
@@ -270,3 +272,10 @@ cost:
   enabled: true
   monthly_budget_usd: 0       # 0 = no limit; otherwise hard-stop when exceeded
   warn_at_pct: 80
+  # Los precios de los modelos cambian. La tabla integrada es orientativa;
+  # sobreescríbela aquí (USD por 1M de tokens) para mantener el costo honesto
+  # sin recompilar. La clave es provider:model, o "provider:" para todo el
+  # proveedor. Ejemplo:
+  # pricing:
+  #   "openai:gpt-5":      { input_per_1m: 5.00, output_per_1m: 20.00, cached_input_per_1m: 0.50 }
+  #   "openai:gpt-5-mini": { input_per_1m: 0.25, output_per_1m: 1.00,  cached_input_per_1m: 0.025 }

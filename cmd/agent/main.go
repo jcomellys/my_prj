@@ -82,6 +82,15 @@ func main() {
 		tracker = t
 		log.Info("cost.tracker.ready", "path", "cost.log")
 	}
+	// User-supplied prices win over the built-in table (prices change).
+	for name, p := range cfg.Cost.Pricing {
+		cost.Override(name, cost.Pricing{
+			InputPer1M:       p.InputPer1M,
+			OutputPer1M:      p.OutputPer1M,
+			CachedInputPer1M: p.CachedInputPer1M,
+		})
+		log.Info("cost.pricing.override", "brain", name)
+	}
 
 	// --- OS Adapter + Tools -------------------------------------------------
 	osa := osadapter.NewMacOS()
@@ -191,6 +200,23 @@ func main() {
 		runner := subagent.New(subBrain, subReg, agent.SubAgentSystemPrompt, log)
 		runner.Cost = tracker
 		runner.SessionID = "subagent"
+		// Mid-task budget guard: without it a 24-round delegated task could
+		// burn past the monthly cap between the orchestrator's per-turn
+		// checks. Unreadable cost log fails open (the turn-level check and
+		// MaxRounds still bound it).
+		if tracker != nil && cfg.Cost.MonthlyBudgetUSD > 0 {
+			budget := cfg.Cost.MonthlyBudgetUSD
+			runner.BudgetCheck = func() error {
+				s, err := tracker.Month()
+				if err != nil {
+					return nil
+				}
+				if s.USD >= budget {
+					return fmt.Errorf("se alcanzó el presupuesto mensual (%.2f de %.2f dólares)", s.USD, budget)
+				}
+				return nil
+			}
+		}
 		// Mid-task voice narration (fase 1 incr 2): fixed phrases, rate-
 		// limited, zero extra tokens. Silent pass-through if the voice
 		// provider can't Speak.

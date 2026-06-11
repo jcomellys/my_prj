@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"unicode/utf8"
 
 	"github.com/jcomellys/voice-mac-agent/internal/brain"
 	"github.com/jcomellys/voice-mac-agent/internal/cost"
@@ -53,6 +54,13 @@ type Runner struct {
 	// to the sub-agent's brain name.
 	Cost      *cost.Tracker
 	SessionID string
+
+	// BudgetCheck, when set, is consulted before every round. A non-nil
+	// error aborts the task with that error (the frontal speaks it). Closes
+	// the increment-1 gap where MaxRounds was the only mid-task cost bound:
+	// a delegated task could burn past the monthly budget between the
+	// orchestrator's per-turn checks.
+	BudgetCheck func() error
 }
 
 func New(b brain.Brain, reg *tools.Registry, system string, log *slog.Logger) *Runner {
@@ -97,7 +105,20 @@ func (r *Runner) RunWithProgress(ctx context.Context, task string, progress chan
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
+		if r.BudgetCheck != nil {
+			if err := r.BudgetCheck(); err != nil {
+				log.Warn("subagent.budget_stop", "round", round, "err", err)
+				return "", fmt.Errorf("tarea detenida por presupuesto: %w", err)
+			}
+		}
 		emit(ctx, progress, ProgressEvent{Kind: ProgressRound, Round: round})
+
+		// Bound what each round re-sends: a task can run 24 rounds on the
+		// deep brain, and early tool payloads (a whole PDF, a long file)
+		// would otherwise be re-billed on every one of them.
+		if before, after := compactTaskHistory(history); after < before {
+			log.Info("subagent.history.compact", "before_bytes", before, "after_bytes", after)
+		}
 
 		resp, err := r.Brain.Chat(ctx, history, specs)
 		if err != nil {
@@ -175,9 +196,54 @@ func (r *Runner) runTool(ctx context.Context, tc brain.ToolCall) (tools.Result, 
 	return t.Execute(ctx, tc.Arguments)
 }
 
+// Task-history compaction bounds. Mirrors the orchestrator's session-level
+// compaction, scoped to one delegated task: old tool payloads are shrunk,
+// but messages are never dropped — the sub-agent needs its full plan trail.
+const (
+	taskHistorySoftLimit = 32 * 1024
+	taskKeepRecentMsgs   = 8 // never touch the most recent messages
+	taskToolResultMin    = 600
+	taskToolResultKeep   = 300
+)
+
+// compactTaskHistory shrinks tool results (and drops images) older than the
+// recent tail once the task history exceeds the soft limit. Returns the
+// byte size before and after so the caller can log when it acted.
+func compactTaskHistory(h []brain.Message) (before, after int) {
+	size := func() int {
+		n := 0
+		for _, m := range h {
+			n += len(m.Content)
+			for _, img := range m.Images {
+				n += len(img.Data)
+			}
+		}
+		return n
+	}
+	before = size()
+	if before <= taskHistorySoftLimit {
+		return before, before
+	}
+	protect := len(h) - taskKeepRecentMsgs
+	for i := 2; i < protect; i++ { // 0 = system prompt, 1 = the task itself
+		m := &h[i]
+		m.Images = nil
+		if m.Role == brain.RoleTool && len(m.Content) > taskToolResultMin {
+			m.Content = truncate(m.Content, taskToolResultKeep) +
+				"\n…(resultado antiguo recortado para ahorrar contexto)"
+		}
+	}
+	return before, size()
+}
+
+// truncate cuts s to at most n bytes without splitting a multibyte rune.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "…"
+	cut := n
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
 }

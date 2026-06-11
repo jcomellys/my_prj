@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -226,5 +227,77 @@ func TestRunner_FullProgressChannelNeverBlocksTask(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("runner blocked on a progress send — emit must be non-blocking")
+	}
+}
+
+func TestRunner_BudgetCheckStopsTask(t *testing.T) {
+	reg := tools.NewRegistry()
+	reg.Register(&probeTool{name: "do_thing", result: "done"})
+
+	b := &scriptedBrain{name: "openai:gpt-5", queue: []brain.Response{
+		{ToolCalls: []brain.ToolCall{{ID: "1", Name: "do_thing", Arguments: "{}"}}},
+		{Text: "no debería llegar aquí"},
+	}}
+	r := New(b, reg, "sys", quiet())
+	calls := 0
+	r.BudgetCheck = func() error {
+		calls++
+		if calls > 1 { // first round allowed, then budget exhausted
+			return fmt.Errorf("se alcanzó el presupuesto mensual")
+		}
+		return nil
+	}
+
+	_, err := r.Run(context.Background(), "tarea cara")
+	if err == nil || !strings.Contains(err.Error(), "presupuesto") {
+		t.Fatalf("expected budget-stop error, got %v", err)
+	}
+	if b.calls != 1 {
+		t.Errorf("brain must not be called after the budget stop, got %d calls", b.calls)
+	}
+}
+
+func TestCompactTaskHistory_ShrinksOldKeepsRecent(t *testing.T) {
+	big := strings.Repeat("contenido de PDF ", 3000) // ~50 KB
+	h := []brain.Message{
+		{Role: brain.RoleSystem, Content: "sys"},
+		{Role: brain.RoleUser, Content: "la tarea"},
+		{Role: brain.RoleAssistant, ToolCalls: []brain.ToolCall{{ID: "a", Name: "read_pdf"}}},
+		{Role: brain.RoleTool, ToolCallID: "a", Name: "read_pdf", Content: big},
+	}
+	// Pad with enough recent messages to push the big result out of the tail.
+	for i := 0; i < taskKeepRecentMsgs; i++ {
+		h = append(h, brain.Message{Role: brain.RoleAssistant, Content: "paso"})
+	}
+	recent := strings.Repeat("x", 2000)
+	h[len(h)-1] = brain.Message{Role: brain.RoleTool, ToolCallID: "z", Name: "read_file", Content: recent}
+
+	before, after := compactTaskHistory(h)
+	if after >= before {
+		t.Fatalf("expected compaction: before=%d after=%d", before, after)
+	}
+	if len(h[3].Content) > taskToolResultKeep+100 {
+		t.Errorf("old tool result not shrunk: %d bytes", len(h[3].Content))
+	}
+	if !strings.Contains(h[3].Content, "recortado") {
+		t.Error("shrunk result must carry the elision marker")
+	}
+	if len(h[len(h)-1].Content) != len(recent) {
+		t.Error("recent tail must remain untouched")
+	}
+	if h[0].Content != "sys" || h[1].Content != "la tarea" {
+		t.Error("system prompt and task must never change")
+	}
+}
+
+func TestCompactTaskHistory_UnderLimitUntouched(t *testing.T) {
+	h := []brain.Message{
+		{Role: brain.RoleSystem, Content: "sys"},
+		{Role: brain.RoleUser, Content: "tarea"},
+		{Role: brain.RoleTool, ToolCallID: "a", Content: "corto"},
+	}
+	before, after := compactTaskHistory(h)
+	if before != after || h[2].Content != "corto" {
+		t.Errorf("history under the limit must not change (before=%d after=%d)", before, after)
 	}
 }

@@ -132,6 +132,18 @@ type CostConfig struct {
 	Enabled          bool    `yaml:"enabled"`
 	MonthlyBudgetUSD float64 `yaml:"monthly_budget_usd"`
 	WarnAtPct        int     `yaml:"warn_at_pct"`
+	// Pricing overrides the built-in per-1M-token price table, keyed by
+	// brain name ("openai:gpt-5", or "openai:" as a provider-wide prefix).
+	// Model prices change; this keeps cost tracking honest without a
+	// recompile.
+	Pricing map[string]PricingConfig `yaml:"pricing"`
+}
+
+// PricingConfig is a user-supplied price row, USD per 1M tokens.
+type PricingConfig struct {
+	InputPer1M       float64 `yaml:"input_per_1m"`
+	OutputPer1M      float64 `yaml:"output_per_1m"`
+	CachedInputPer1M float64 `yaml:"cached_input_per_1m"`
 }
 
 func LoadConfig(path string) (*Config, error) {
