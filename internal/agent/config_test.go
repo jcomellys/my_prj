@@ -32,6 +32,16 @@ func TestExampleConfig_VoiceProfilesStructure(t *testing.T) {
 				name, p.Voice.STT.Whisper.MaxListenSeconds)
 		}
 	}
+	// manos_libres ships the low-latency fast brain for fast-path turns
+	// (the 5.6s response-round neck measured live in X-017).
+	ml := cfg.Profiles["manos_libres"]
+	if ml.Brain.Fast == nil {
+		t.Fatal("manos_libres: brain.fast missing — fast-path turns would stay on gpt-5 (5.6s)")
+	}
+	if ml.Brain.Fast.Model != "gpt-5-mini" || ml.Brain.Fast.ReasoningEffort != "minimal" {
+		t.Errorf("manos_libres: brain.fast should be gpt-5-mini/minimal, got %s/%s",
+			ml.Brain.Fast.Model, ml.Brain.Fast.ReasoningEffort)
+	}
 }
 
 func writeTemp(t *testing.T, body string) string {

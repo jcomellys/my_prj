@@ -57,3 +57,35 @@ go run ./cmd/agent --config config.yaml --env .env -v
 - Permiso de Accesibilidad ya concedido (hotkey) cubre `type_text`.
 - `read_open_pdf` usa `lsof`, NO scriptea Vista Previa: no debe aparecer el
   diálogo de Automatización ni el cuelgue de ~87 s.
+
+## Actualización tras X-017 (2026-06-11): cerebro rápido para fast-paths
+
+Dato vivo X-017: el fast-path estructural funciona (read_open_pdf 145 ms,
+una sola `brain.response`, "Introduction" leído en español), pero el E2E fue
+5731 ms porque la vuelta de respuesta corrió en gpt-5 (5584 ms). El cuello
+ya no es la tool: es el modelo que traduce/narra.
+
+**Cambio:** `manos_libres` ahora trae `brain.fast` = gpt-5-mini con
+`reasoning_effort: minimal`. Cuando el fast-path dispara, SOLO esa vuelta de
+respuesta corre en el modelo rápido. Logs esperados, en orden:
+
+```
+fastpath.ok tool=read_open_pdf dur_ms≈100-200
+brain.fastpath brain=openai:gpt-5-mini
+brain.response brain=openai:gpt-5-mini round=0 dur_ms≈1000-2000
+```
+
+**Tradeoff (documentado también en config.example.yaml):** traducir y narrar
+un extracto de ≤2.5 KB es tarea simple; gpt-5-mini la hace bien y en una
+fracción del tiempo. Si la calidad no alcanzara en un caso, el modelo rápido
+puede llamar `escalate` (la válvula sigue ofrecida), o se borra el bloque
+`fast:` del perfil para volver a gpt-5 en todo. Los turnos normales (sin
+fast-path) NO cambian: siguen en el cerebro principal.
+
+**Otros cambios observables:**
+- Barge-in durante el fast-path ahora loggea `fastpath.cancelled` (INFO),
+  no `fastpath.error` — cancelación humana ≠ fallo de tool.
+- Cada `brain.response` trae `history_msgs` y `history_bytes`; la línea
+  `history.compact` aparece cuando el prompt supera 24 KiB (criterio por
+  bytes, no por número de turnos).
+- Checklist vigente: C-020 en docs/agent_comms/inbox_codex.md.

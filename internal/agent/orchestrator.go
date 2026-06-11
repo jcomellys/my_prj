@@ -29,6 +29,7 @@ type Orchestrator struct {
 	Voice     voice.Provider
 	Brain     brain.Brain // default (cheap) brain
 	DeepBrain brain.Brain // optional stronger brain; nil disables escalation
+	FastBrain brain.Brain // optional low-latency brain for fast-path turns; nil disables
 	Tools     *tools.Registry
 	System    string // system prompt
 	MaxRounds int    // hard cap on tool-call rounds per user turn (prevents loops)
@@ -93,6 +94,16 @@ func (o *Orchestrator) WithBudget(monthlyUSD float64, warnAtPct int) *Orchestrat
 // nil leaves single-tier behavior unchanged.
 func (o *Orchestrator) WithDeepBrain(b brain.Brain) *Orchestrator {
 	o.DeepBrain = b
+	return o
+}
+
+// WithFastBrain routes turns where a fast path already pre-ran the tool to a
+// low-latency model: the remaining work is "narrate/translate this excerpt",
+// which doesn't need the deep brain (measured 5.6s on gpt-5 live, X-017).
+// The escalate tool stays offered, so the fast brain can still hand off a
+// turn that turns out to be hard. Passing nil leaves behavior unchanged.
+func (o *Orchestrator) WithFastBrain(b brain.Brain) *Orchestrator {
+	o.FastBrain = b
 	return o
 }
 
@@ -161,9 +172,16 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 	// Fast paths: detect simple intents and pre-run the matching tool in Go,
 	// removing a brain round-trip that exists only to pick a tool. The brain
 	// loop's first call then becomes the response round (one round, not two).
-	o.tryFastPath(ctx, userText)
+	fastpathFired := o.tryFastPath(ctx, userText)
 
 	activeBrain := o.Brain
+	// When the fast path already did the tool work, the response round is a
+	// narration/translation job — route it to the low-latency tier if one is
+	// configured. escalate stays available below as the quality valve.
+	if fastpathFired && o.FastBrain != nil {
+		activeBrain = o.FastBrain
+		o.Log.Info("brain.fastpath", "brain", activeBrain.Name())
+	}
 
 	for round := 0; round < o.MaxRounds; round++ {
 		// Offer the escalate tool only while running on the cheap brain.
@@ -199,6 +217,8 @@ func (o *Orchestrator) HandleUtterance(ctx context.Context, userText string) (st
 			"out_tokens", resp.Usage.OutputTokens,
 			"cached_in_tokens", resp.Usage.CachedInputTokens,
 			"usd", usd,
+			"history_msgs", len(o.history),
+			"history_bytes", historyBytes(o.history),
 		)
 		if o.Cost != nil {
 			_ = o.Cost.Record(cost.Entry{

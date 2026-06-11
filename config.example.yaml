@@ -186,6 +186,20 @@ profiles:
       # quieres aún más velocidad en comandos simples. Para razonamiento
       # profundo, delega al sub-agente (que puede usar más esfuerzo).
       reasoning_effort: low
+      # Cerebro RÁPIDO para los fast-paths ("léeme la sección X"): cuando Go
+      # ya ejecutó la tool, lo que queda es traducir/narrar un extracto — no
+      # necesita gpt-5. Medido en vivo (X-017): la vuelta de respuesta tardaba
+      # 5.6s en gpt-5; gpt-5-mini con reasoning minimal apunta a ~1-2s.
+      # TRADEOFF: traducción/narración de un extracto corto es tarea simple y
+      # gpt-5-mini la hace bien; si alguna vez la calidad no alcanza, el
+      # modelo puede escalar solo (tool escalate) o puedes borrar este bloque
+      # para volver a gpt-5 en todos los turnos.
+      fast:
+        provider: openai
+        model: gpt-5-mini
+        temperature: 0
+        max_tokens: 2048
+        reasoning_effort: minimal
     activator:
       kind: hotkey
       hotkey:

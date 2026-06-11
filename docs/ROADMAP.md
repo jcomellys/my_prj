@@ -275,15 +275,32 @@ extra LLM call, $0):
 - [ ] Live observation: in a long session, grep `history.compact` and confirm
       in_tokens stops growing turn-over-turn.
 
-## Fast-path robustness (bench, queued for C-019 live run)
+## Fast-path robustness (bench; partial live proof X-017, final run = C-020)
 
-- [x] "léeme la sección **de** introducción", "…**por favor**", "…**en su
-      idioma original / en inglés / del pdf**" now clean to the bare heading
-      before hitting the tool (the raw capture used to fail the heading
-      match). "léame" (usted) accepted.
+X-017 live (commit 35f62a4): the fast path structurally works — read_open_pdf
+145 ms BEFORE the brain, exactly one brain.response, "Introduction" read in
+Spanish. But E2E was 5731 ms: the response round ran on gpt-5 (5584 ms). The
+neck moved from the tool to the narrating model.
+
+- [x] "léeme la sección **de** introducción", "…**por favor**" (with comma),
+      "…**en su idioma original / en inglés / del pdf**" now clean to the
+      bare heading before hitting the tool. "léame" (usted) accepted. The
+      C-020 canonical/natural phrases are pinned by deterministic tests.
 - [x] Synthetic fast-path tool-call ids unique per session (Anthropic rejects
       duplicate tool_use ids).
 - [x] UTF-8-safe truncation in logs and PDF section windows (no split runes).
+- [x] **Fast response tier** (the X-017 latency fix): optional `brain.fast`
+      config; when a fast path fires, the response round routes to it
+      (`brain.fastpath` log line). manos_libres ships gpt-5-mini /
+      reasoning_effort=minimal — translate-and-narrate an excerpt doesn't
+      need gpt-5. escalate stays offered as the quality valve; normal turns
+      unchanged. Tradeoff documented in config.example.yaml + runbook.
+- [x] Barge-in during a fast path logs `fastpath.cancelled` (INFO), leaves
+      history clean — human cancellation is not a tool failure.
+- [x] `brain.response` now logs `history_msgs`/`history_bytes` so prompt
+      growth (and history.compact's 24 KiB trigger) is observable live.
+- [ ] Live final run: C-020 (E2E target ≈3s, or the limit documented with
+      dur_ms evidence).
 
 ## Fase 0.4.2B — Streaming TTS (deferred)
 

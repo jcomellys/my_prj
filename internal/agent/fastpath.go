@@ -38,11 +38,14 @@ var sectionTrailerRe = regexp.MustCompile(
 )
 
 // cleanSectionName strips the speech wrappers around a captured section name.
-// Returns "" when nothing remains (the utterance was all filler).
+// Punctuation left behind by a removed trailer ("introducción, por favor" →
+// "introducción,") is pruned each pass. Returns "" when nothing remains (the
+// utterance was all filler).
 func cleanSectionName(s string) string {
 	s = strings.TrimSpace(s)
 	for {
-		t := sectionTrailerRe.ReplaceAllString(s, "")
+		t := strings.TrimRight(strings.TrimSpace(s), ",;:")
+		t = sectionTrailerRe.ReplaceAllString(t, "")
 		if t == s {
 			break
 		}
@@ -88,6 +91,14 @@ func (o *Orchestrator) runFastPath(ctx context.Context, name string, args map[st
 	durMs := time.Since(start).Milliseconds()
 
 	if err != nil {
+		// A barge-in (hotkey) or shutdown cancels the ctx mid-tool. That is a
+		// human action, not a tool failure: log it as a clean cancellation,
+		// leave history untouched, and let the aborted turn die upstream.
+		if ctx.Err() != nil {
+			o.Log.Info("fastpath.cancelled",
+				"tool", name, "dur_ms", durMs, "args", string(argsJSON))
+			return false
+		}
 		res = tools.Result{Text: "ERROR: " + err.Error()}
 		o.Log.Warn("fastpath.error",
 			"tool", name, "dur_ms", durMs, "args", string(argsJSON), "err", err)

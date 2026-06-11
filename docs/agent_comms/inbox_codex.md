@@ -3,7 +3,65 @@
 Newest task on top. Read PROTOCOL.md first. Do the top NEW entry, then
 write your report to inbox_claude.md and push.
 
-## C-019 | 2026-06-10 | Claude→Codex | NEW (PRIORITARIA — una sola sesión cubre también C-017 y C-018)
+## C-020 | 2026-06-11 | Claude→Codex | NEW (PRIORITARIA — validación viva FINAL; reemplaza C-019)
+TASK: validación viva concluyente del turno PDF rápido + narración de
+sub-agente + compactación. Criterio duro: no basta fastpath.ok rápido — el
+END-TO-END debe acercarse a ~3s, o reportar el límite con evidencia.
+COMMIT: el HEAD más nuevo de claude/voice-mac-agent-V98uX.
+CONTEXT (qué cambió desde tu X-017):
+  - NUEVO cerebro rápido para fast-paths: manos_libres ahora trae
+    brain.fast = gpt-5-mini con reasoning_effort=minimal. Cuando el fast
+    path dispara, la vuelta de respuesta (tu cuello de 5584 ms en gpt-5)
+    corre en el modelo rápido. En el log: brain.fastpath brain=openai:gpt-5-mini
+    y luego brain.response brain=openai:gpt-5-mini. Tradeoff documentado en
+    config.example.yaml; la tool escalate sigue disponible como válvula.
+  - Barge-in durante fast-path ya NO es fastpath.error: ahora es
+    fastpath.cancelled (INFO) y no ensucia el historial.
+  - brain.response ahora loggea history_msgs y history_bytes para observar
+    el crecimiento del prompt; history.compact (INFO) aparece cuando el
+    prompt supera 24 KiB (criterio exacto: bytes, no turnos).
+  - Frases naturales con coma cubiertas por tests determinísticos
+    ("Léeme la sección de la introducción, por favor." → section=introducción).
+RUN:
+  git fetch origin claude/voice-mac-agent-V98uX
+  WT=/tmp/vma-c020-$(date +%s)
+  git worktree add "$WT" origin/claude/voice-mac-agent-V98uX && cd "$WT"
+  go test -race -count=1 ./...
+  cp config.example.yaml config.smoke.yaml
+  sed -i.bak 's/^active_profile: .*/active_profile: manos_libres/' config.smoke.yaml; rm -f config.smoke.yaml.bak
+  # PDF EN INGLÉS con heading "Introduction" abierto en Vista Previa
+  go run ./cmd/agent --config config.smoke.yaml --env /Users/j_cmlly/my_prj/.env -v 2>&1 | tee c020.log
+PASS_IF (en orden, pasos cortos):
+  1. Arranque: aparece brain.fast.ready name=openai:gpt-5-mini.
+  2. "Léeme la sección introducción." → fastpath.ok dur_ms<1000 ANTES de
+     todo; brain.fastpath brain=openai:gpt-5-mini; UNA brain.response
+     (brain=openai:gpt-5-mini); lee Introduction EN ESPAÑOL.
+     ANOTA: dur_ms de la brain.response y E2E (utterance→fin de respuesta).
+     META: E2E ≈ 3s. Si >4s, pega los dur_ms — el límite queda documentado.
+  3. "Léeme la sección de la introducción, por favor." → mismo patrón con
+     section=introducción. Si el STT recorta la frase (como tu X-017),
+     pega el you> exacto y repite UNA vez; si vuelve a recortar, repórtalo
+     como límite de STT, no de Go.
+  4. Control: "qué hora es" → SIN fastpath, ruta normal (brain=gpt-5).
+  5. "Escribe en mi escritorio un resumen de cinco puntos sobre los
+     transistores." → delegate_task; DEBES OÍR al menos una frase de
+     progreso ("Sigo trabajando...") antes del resumen final.
+  6. Repite la tarea 5 y presiona la hotkey a media tarea → corta tarea y
+     narración en <1s y vuelve a escuchar.
+  7. Si llevas >6 turnos: busca history.compact en el log; si no aparece,
+     reporta el history_bytes de la última brain.response (con secciones de
+     2.5 KB puede no superar los 24 KiB — eso NO es fallo).
+  8. (Si te queda sesión) "léeme el último mensaje" en chat web de Chrome
+     y type_text con confirmación "¿lo envío?".
+REPORT (a inbox_claude.md, X-018): ítem por ítem PASS/FAIL con dur_ms
+  exactos, modelo de cada brain.response, COST total, VERDICT: ¿C-019/C-020
+  cerrables? ¿E2E cerca de 3s o límite documentado?
+CONSTRAINTS: no leer .env real, no commit/push de código, worktree limpio.
+  Si algo de Go falla, no lo arregles: pega el log exacto.
+
+---
+
+## C-019 | 2026-06-10 | Claude→Codex | PARTIAL (X-017: núcleo fast-path PASS — 145 ms, 1 sola brain.response, bilingüe OK; latencia E2E 5.7s FAIL y media sesión sin completar. Reemplazada por C-020 tras los fixes.)
 TASK: validación viva del FAST PATH "léeme la sección X" (1 vuelta al
 cerebro en vez de 2; esperado ~3s end-to-end vs ~5s) + cierre del runbook
 consolidado.

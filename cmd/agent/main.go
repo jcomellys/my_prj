@@ -141,6 +141,23 @@ func main() {
 		orch.WithDeepBrain(deep)
 		log.Info("brain.deep.ready", "name", deep.Name())
 	}
+	// Low-latency tier for fast-path turns: when Go pre-ran the tool, the
+	// response is a narration/translation job that a small fast model does
+	// in a fraction of the deep model's time (5.6s → target ~1-2s, X-017).
+	if f := prof.Brain.Fast; f != nil {
+		fast, err := buildBrain(agent.BrainConfig{
+			Provider:        f.Provider,
+			Model:           f.Model,
+			Temperature:     f.Temperature,
+			MaxTokens:       f.MaxTokens,
+			ReasoningEffort: f.ReasoningEffort,
+		})
+		if err != nil {
+			fatal(log, fmt.Errorf("fast brain: %w", err))
+		}
+		orch.WithFastBrain(fast)
+		log.Info("brain.fast.ready", "name", fast.Name())
+	}
 
 	// Sub-agent: delegate_task hands big multi-step jobs to an autonomous
 	// worker on the strongest available brain, with an extended tool set

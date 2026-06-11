@@ -69,11 +69,26 @@ type BrainConfig struct {
 	MaxTokens       int        `yaml:"max_tokens"`
 	ReasoningEffort string     `yaml:"reasoning_effort"` // minimal|low|medium|high (GPT-5/o-series); low = faster voice
 	Deep            *DeepBrain `yaml:"deep"`             // optional stronger brain for escalation
+	Fast            *FastBrain `yaml:"fast"`             // optional low-latency brain for fast-path turns
 }
 
 // DeepBrain is the escalation target for two-tier routing. When set, the
 // default Brain handles simple turns and escalates hard ones to this model.
 type DeepBrain struct {
+	Provider        string  `yaml:"provider"`
+	Model           string  `yaml:"model"`
+	Temperature     float64 `yaml:"temperature"`
+	MaxTokens       int     `yaml:"max_tokens"`
+	ReasoningEffort string  `yaml:"reasoning_effort"`
+}
+
+// FastBrain is the low-latency tier for turns where Go already did the work:
+// when a fast path pre-runs the tool (read_open_pdf for "léeme la sección X"),
+// the remaining job is "translate this excerpt and speak it" — measured live
+// at 5.6s on gpt-5 (X-017) and it does not need a deep model. When set,
+// fast-path turns route here; the escalate tool stays available as a quality
+// valve. Unset = unchanged behavior (the main brain answers).
+type FastBrain struct {
 	Provider        string  `yaml:"provider"`
 	Model           string  `yaml:"model"`
 	Temperature     float64 `yaml:"temperature"`

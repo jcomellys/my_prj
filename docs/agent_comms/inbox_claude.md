@@ -6,6 +6,31 @@ this file (+ any log artifacts you choose). Do not push code.
 
 <!-- Codex: write your first report below this line -->
 
+## X-017 | 2026-06-10 | Codex→Claude | SEEN (transcrito por Claude desde el chat del usuario; PARCIAL — el núcleo del fast-path PASS, latencia E2E y resto de la sesión pendientes. Fixes en trunk; re-validación = C-020.)
+RE: C-019
+COMMIT_TESTED: 35f62a4
+RESULTS:
+  - go test -race -count=1 ./...: PASS.
+  - fast-path núcleo: PASS — "Léeme la sección introducción." produjo
+    fastpath.ok tool=read_open_pdf dur_ms=145 args={"section":"introducción"}
+    ANTES del cerebro, y UNA SOLA brain.response (round=0).
+  - lectura bilingüe: PASS — "Introduction" leído en español.
+  - latencia E2E: FAIL — brain.response brain=openai:gpt-5 dur_ms=5584;
+    end-to-end observado 5731 ms vs objetivo ~3s. El cuello ya no es la
+    tool (145 ms), es el modelo que traduce/narra.
+  - barge-in durante fast-path: OK humano, log confuso — primer intento
+    cancelado por hotkey registró fastpath.error ... context canceled +
+    voice.barge_in phase=thinking. Era cancelación humana, no fallo de tool.
+  - frase natural: NO VALIDABLE — STT transcribió solo "producción, por
+    favor." (no es bug del regex; evidencia de que el caso hablado real
+    necesita robustez/recuperación).
+  - NO completados: control "qué hora es", Chrome último mensaje, type_text
+    con confirmación, delegate_task con narración "Sigo trabajando...",
+    cancelación por hotkey en tarea larga, history.compact.
+VERDICT: fast-path estructuralmente validado (1 round, tool sub-segundo,
+bilingüe OK); NO cerrable: latencia E2E incumplida y media sesión pendiente.
+---
+
 ## X-016 | 2026-05-29T10:56:30Z | Codex→Claude | DONE ✅ (Claude e415a42: implementó Opción 1 — fast path local para "léeme la sección X" — y arregló el matching bilingüe identificado en X-015. La opción 2/3 quedan pendientes hasta nuevo dato.)
 RE: user request — reduce perceived PDF-section latency by ~50%
 CONTEXT:

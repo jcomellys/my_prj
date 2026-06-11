@@ -17,9 +17,16 @@ func TestSectionRequestRe_Matches(t *testing.T) {
 		in   string
 		want string
 	}{
+		// The C-020 canonical and natural phrases, verbatim:
+		{"Léeme la sección introducción.", "introducción"},
+		{"Léeme la sección de la introducción, por favor.", "introducción"},
+		{"Lee la sección de introducción.", "introducción"},
+		// Case / accent / punctuation variants:
 		{"léeme la sección introducción", "introducción"},
+		{"LÉEME LA SECCIÓN INTRODUCCIÓN!", "INTRODUCCIÓN"},
 		{"Léeme la sección Introducción.", "Introducción"},
 		{"leeme la seccion introducción", "introducción"}, // STT drops accents
+		{"leeme la seccion introduccion", "introduccion"}, // STT drops all accents
 		{"Lee la sección de resultados", "resultados"},
 		{"Léame la sección conclusiones", "conclusiones"}, // formal usted
 		{"léeme la sección 3", "3"},
@@ -27,6 +34,7 @@ func TestSectionRequestRe_Matches(t *testing.T) {
 		{"léeme la sección de la introducción del pdf por favor", "introducción"},
 		{"léeme la sección resumen en su idioma original", "resumen"},
 		{"léeme la sección métodos en inglés", "métodos"},
+		{"Léeme la sección de la introducción, por favor", "introducción"}, // no final period
 	}
 	for _, c := range cases {
 		m := sectionRequestRe.FindStringSubmatch(c.in)
@@ -120,6 +128,87 @@ func TestFastPath_UniqueToolCallIDs(t *testing.T) {
 				t.Errorf("duplicate tool-call id %q in history", tc.ID)
 			}
 			seen[tc.ID] = true
+		}
+	}
+}
+
+// TestFastPath_RoutesResponseToFastBrain: with a fast brain configured, the
+// response round after a fast path runs on it — that round is a narration/
+// translation job and was the 5.6s neck measured live (X-017).
+func TestFastPath_RoutesResponseToFastBrain(t *testing.T) {
+	reg := tools.NewRegistry()
+	reg.Register(&programmableTool{name: "read_open_pdf", result: "Introduction\ntext"})
+
+	main := &recordingBrain{name: "openai:gpt-5", queue: []brain.Response{{Text: "no debería responder yo"}}}
+	fast := &recordingBrain{name: "openai:gpt-5-mini", queue: []brain.Response{{Text: "La introducción dice…"}}}
+	orch := New(nil, main, reg, "system", quietLogger()).WithFastBrain(fast)
+
+	reply, err := orch.HandleUtterance(context.Background(), "léeme la sección introducción")
+	if err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+	if fast.calls != 1 {
+		t.Errorf("fast brain must answer the fast-path turn, got %d calls", fast.calls)
+	}
+	if main.calls != 0 {
+		t.Errorf("main brain must not run on a fast-path turn when fast is set, got %d calls", main.calls)
+	}
+	if !strings.Contains(reply, "introducción") {
+		t.Errorf("unexpected reply %q", reply)
+	}
+}
+
+// TestFastPath_NoFastBrainOnNormalTurn: a non-fast-path turn must stay on the
+// main brain even when a fast brain is configured.
+func TestFastPath_NoFastBrainOnNormalTurn(t *testing.T) {
+	main := &recordingBrain{name: "openai:gpt-5", queue: []brain.Response{{Text: "listo"}}}
+	fast := &recordingBrain{name: "openai:gpt-5-mini"}
+	orch := New(nil, main, tools.NewRegistry(), "system", quietLogger()).WithFastBrain(fast)
+
+	if _, err := orch.HandleUtterance(context.Background(), "abre Mensajes"); err != nil {
+		t.Fatalf("HandleUtterance: %v", err)
+	}
+	if main.calls != 1 || fast.calls != 0 {
+		t.Errorf("normal turn must use the main brain: main=%d fast=%d", main.calls, fast.calls)
+	}
+}
+
+// ctxErrTool fails with the context's error — what a real tool does when a
+// barge-in cancels it mid-flight.
+type ctxErrTool struct{ called int }
+
+func (c *ctxErrTool) Spec() brain.ToolSpec {
+	return brain.ToolSpec{Name: "read_open_pdf", Description: "t", Schema: map[string]any{"type": "object"}}
+}
+func (c *ctxErrTool) Execute(ctx context.Context, _ string) (tools.Result, error) {
+	c.called++
+	return tools.Result{}, ctx.Err()
+}
+
+// TestFastPath_BargeInIsCleanCancellation: a hotkey barge-in during the
+// fast-path tool must NOT splice an ERROR tool result into history (it was a
+// human action, not a tool failure) and must not count as a fired fast path.
+func TestFastPath_BargeInIsCleanCancellation(t *testing.T) {
+	reg := tools.NewRegistry()
+	tool := &ctxErrTool{}
+	reg.Register(tool)
+
+	b := &scriptedBrain{queue: []brain.Response{{Text: "irrelevante"}}}
+	orch := New(nil, b, reg, "system", quietLogger())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // barge-in already happened
+	_, _ = orch.HandleUtterance(ctx, "léeme la sección introducción")
+
+	if tool.called != 1 {
+		t.Fatalf("tool should have been attempted once, got %d", tool.called)
+	}
+	for _, m := range orch.history {
+		if m.Role == brain.RoleTool {
+			t.Errorf("cancelled fast path must not leave a tool result in history, found %q", m.Content)
+		}
+		if len(m.ToolCalls) != 0 {
+			t.Errorf("cancelled fast path must not leave a synthetic tool_call in history")
 		}
 	}
 }
