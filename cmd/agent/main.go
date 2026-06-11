@@ -334,6 +334,15 @@ func buildVoice(vc agent.VoiceConfig, ac agent.ActivatorConfig, log *slog.Logger
 	switch vc.TTS.Provider {
 	case "macos_say", "":
 		ttsImpl = tts.NewMacOSSay(vc.TTS.Voice, vc.TTS.Rate)
+	case "openai_tts":
+		key := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+		if key == "" {
+			return nil, fmt.Errorf("tts.provider=openai_tts but OPENAI_API_KEY is unset")
+		}
+		// Fallback to the local voice on any API failure — a network blip
+		// must degrade voice quality, never availability (accessibility).
+		fallback := tts.NewMacOSSay("", 0)
+		ttsImpl = tts.NewOpenAITTS(key, vc.TTS.Model, vc.TTS.Voice, vc.TTS.Speed, fallback)
 	default:
 		return nil, fmt.Errorf("tts.provider=%q not yet wired", vc.TTS.Provider)
 	}

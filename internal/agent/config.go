@@ -57,9 +57,11 @@ type WhisperSTTConfig struct {
 }
 
 type TTSConfig struct {
-	Provider string `yaml:"provider"` // macos_say | piper | elevenlabs | openai_tts
-	Voice    string `yaml:"voice"`
-	Rate     int    `yaml:"rate"`
+	Provider string  `yaml:"provider"` // macos_say | openai_tts | (piper, elevenlabs: planned)
+	Voice    string  `yaml:"voice"`
+	Rate     int     `yaml:"rate"`  // macos_say: words/min
+	Model    string  `yaml:"model"` // openai_tts: default gpt-4o-mini-tts
+	Speed    float64 `yaml:"speed"` // openai_tts: 0.25-4.0; 0 = 1.0
 }
 
 type BrainConfig struct {

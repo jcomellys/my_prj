@@ -161,6 +161,13 @@ profiles:
             YouTube, Word. Objetos: pestaña, página, pantalla, párrafo,
             hora, gasto.
       tts:
+        # VOZ NATURAL tipo app de Claude/ChatGPT (premium, usa tu OPENAI_API_KEY):
+        # cambia provider a openai_tts. Cuesta fracciones de centavo por frase
+        # y si la red falla cae solo a la voz local (nunca se queda mudo).
+        #   provider: openai_tts
+        #   model: gpt-4o-mini-tts   # default
+        #   voice: marin             # alt: cedar, nova, alloy...
+        #   speed: 1.0
         provider: macos_say
         # Voz: las voces "compacta" por defecto suenan robóticas. Para una voz
         # natural, instala una voz Enhanced/Premium en español:
