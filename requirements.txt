@@ -1,0 +1,55 @@
+# =============================================================================
+# Entorno Python — Ingeniería Eléctrica (Sistemas de Potencia, Control, RF, ML/DL)
+# Versiones fijadas a un conjunto verificado y compatible entre sí.
+# Instalar:  pip install -r requirements.txt
+# =============================================================================
+
+# --- Núcleo científico -------------------------------------------------------
+# numpy<2.4 fija el ABI con el que se compilan scipy y los demás binarios.
+numpy>=2.3,<2.4
+scipy==1.17.1
+matplotlib==3.11.0
+pandas==2.3.3          # <3 por compatibilidad con pandapower
+sympy==1.14.0
+
+# --- Ingeniería Eléctrica ----------------------------------------------------
+control==0.10.2        # Teoría de control (Bode, root locus, espacio de estados)
+scikit-rf==1.12.0      # RF / microondas, parámetros-S
+PySpice==1.5           # Simulación de circuitos (requiere ngspice del sistema)
+networkx==3.6.1        # Grafos / topología de redes
+
+# lcapy declara por error la dependencia obsoleta 'importlib' de PyPI.
+# Instalar aparte con:  pip install --no-deps lcapy
+# lcapy==1.26
+
+# --- Sistemas de Potencia ----------------------------------------------------
+pandapower==3.4.0      # Flujos de potencia, análisis de redes
+pypsa==1.2.3           # Modelado y optimización de sistemas eléctricos
+
+# --- Señales / Datos ---------------------------------------------------------
+PyWavelets==1.8.0
+h5py==3.14.0
+
+# --- Machine Learning / Deep Learning ----------------------------------------
+scikit-learn==1.9.0
+torch==2.12.1          # PyTorch (CPU)
+torch-geometric==2.8.0 # GNN — clave: las redes eléctricas son grafos
+tensorflow==2.21.0
+keras==3.15.0
+optuna                 # Optimización de hiperparámetros
+tensorboard           # Visualización de entrenamiento
+
+# --- Análisis Electromagnético / FEM (transformadores, motores, generadores) -
+# Herramientas nativas de Linux. NOTA: pyleecan/FEMM NO se incluyen aquí porque
+# pyleecan fija numpy<=1.23.1 y FEMM es nativo de Windows (ver README).
+magpylib==5.2.3        # Campos magnéticos analíticos (imanes, bobinas)
+scikit-fem==12.0.2     # FEM ligero (magnetostática, ecuaciones de Maxwell)
+sfepy==2026.1          # FEM general para problemas electromagnéticos
+gmsh==4.15.2           # Generación de mallas 2D/3D (requiere libGLU del sistema)
+meshio==5.3.5          # Lectura/escritura de mallas
+
+# --- Visualización / Entorno -------------------------------------------------
+seaborn==0.13.2
+tqdm==4.68.3
+jupyterlab==4.6.0
+ipython==9.14.1
