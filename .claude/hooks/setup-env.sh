@@ -12,7 +12,7 @@ cd "$REPO_ROOT"
 echo "[setup-env] Verificando entorno Python de Ingeniería Eléctrica..."
 
 # Comprobación rápida: si los paquetes clave importan, no reinstalamos nada.
-if python3 -c "import numpy, scipy, pandapower, torch, torch_geometric, magpylib, skfem" >/dev/null 2>&1; then
+if python3 -c "import numpy, scipy, pandapower, torch, torch_geometric, magpylib, skfem, dpsim" >/dev/null 2>&1; then
     echo "[setup-env] Entorno ya listo. Nada que hacer."
     exit 0
 fi

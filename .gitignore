@@ -1,0 +1,14 @@
+# Artefactos generados por simulaciones
+logs/
+*.csv
+*.pl4
+
+# Imágenes generadas (reproducibles desde los scripts)
+*.png
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/

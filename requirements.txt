@@ -26,6 +26,9 @@ networkx==3.6.1        # Grafos / topología de redes
 pandapower==3.4.0      # Flujos de potencia, análisis de redes
 pypsa==1.2.3           # Modelado y optimización de sistemas eléctricos
 
+# --- Transitorios Electromagnéticos (EMT) ------------------------------------
+dpsim==1.2.1           # Simulador EMT/fasores dinámicos (alternativa a ATP, API Python)
+
 # --- Señales / Datos ---------------------------------------------------------
 PyWavelets==1.8.0
 h5py==3.14.0
