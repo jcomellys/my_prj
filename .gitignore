@@ -2,6 +2,7 @@
 logs/
 *.csv
 *.pl4
+*.mat
 
 # Imágenes generadas (reproducibles desde los scripts)
 *.png
